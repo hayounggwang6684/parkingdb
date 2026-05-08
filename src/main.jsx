@@ -2,11 +2,17 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createWorker } from 'tesseract.js';
 import {
+  ArrowLeft,
   Camera,
   CheckCircle2,
   CircleAlert,
+  Download,
+  Edit3,
   LoaderCircle,
+  Plus,
   Save,
+  Search,
+  Trash2,
   X,
 } from 'lucide-react';
 import { supabase, supabaseConfigured } from './supabaseClient';
@@ -49,7 +55,7 @@ const emptyForm = {
   memo: '',
 };
 
-function App() {
+function CameraApp() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
@@ -579,4 +585,277 @@ function App() {
   );
 }
 
-createRoot(document.getElementById('root')).render(<App />);
+function DatabaseApp() {
+  const [vehicles, setVehicles] = useState([]);
+  const [query, setQuery] = useState('');
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState('');
+  const [notice, setNotice] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetchVehicles();
+  }, []);
+
+  async function fetchVehicles() {
+    if (!supabaseConfigured) {
+      setNotice({ type: 'error', text: 'Supabase 환경 변수가 필요합니다.' });
+      return;
+    }
+
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('vehicles')
+      .select('id, plate_number, normalized_plate_number, car_model, memo, created_at, updated_at')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      setNotice({ type: 'error', text: `DB 조회 실패: ${error.message}` });
+    } else {
+      setVehicles(data ?? []);
+    }
+    setLoading(false);
+  }
+
+  const filteredVehicles = vehicles.filter((vehicle) => {
+    const keyword = normalizePlate(query);
+    if (!keyword) return true;
+
+    return (
+      normalizePlate(vehicle.plate_number).includes(keyword) ||
+      normalizePlate(vehicle.car_model).includes(keyword) ||
+      normalizePlate(vehicle.memo ?? '').includes(keyword)
+    );
+  });
+
+  const counts = vehicles.reduce(
+    (summary, vehicle) => {
+      const isPartial = /^\d{4}$/.test(normalizePlate(vehicle.plate_number));
+      summary.total += 1;
+      summary.partial += isPartial ? 1 : 0;
+      summary.full += isPartial ? 0 : 1;
+      summary.byModel[vehicle.car_model] = (summary.byModel[vehicle.car_model] ?? 0) + 1;
+      return summary;
+    },
+    { total: 0, full: 0, partial: 0, byModel: {} },
+  );
+
+  const topModels = Object.entries(counts.byModel)
+    .sort((first, second) => second[1] - first[1])
+    .slice(0, 6);
+
+  async function saveVehicle(event) {
+    event.preventDefault();
+    const plateNumber = form.plate_number.trim();
+    const carModel = form.car_model.trim();
+
+    if (!plateNumber || !carModel) {
+      setNotice({ type: 'warning', text: '차량번호와 차종을 입력해 주세요.' });
+      return;
+    }
+
+    const payload = {
+      plate_number: plateNumber,
+      car_model: carModel,
+      memo: form.memo.trim() || null,
+    };
+
+    const request = editingId
+      ? supabase.from('vehicles').update(payload).eq('id', editingId)
+      : supabase.from('vehicles').upsert(payload, {
+          onConflict: 'normalized_plate_number',
+          ignoreDuplicates: false,
+        });
+
+    const { error } = await request;
+
+    if (error) {
+      setNotice({ type: 'error', text: `저장 실패: ${error.message}` });
+      return;
+    }
+
+    setNotice({ type: 'success', text: editingId ? '수정 완료' : '저장 완료' });
+    clearForm();
+    await fetchVehicles();
+  }
+
+  function editVehicle(vehicle) {
+    setEditingId(vehicle.id);
+    setForm({
+      plate_number: vehicle.plate_number,
+      car_model: vehicle.car_model,
+      memo: vehicle.memo ?? '',
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function deleteVehicle(vehicle) {
+    const confirmed = window.confirm(`${vehicle.plate_number} 차량을 삭제할까요?`);
+    if (!confirmed) return;
+
+    const { error } = await supabase.from('vehicles').delete().eq('id', vehicle.id);
+
+    if (error) {
+      setNotice({ type: 'error', text: `삭제 실패: ${error.message}` });
+      return;
+    }
+
+    setNotice({ type: 'success', text: '삭제 완료' });
+    await fetchVehicles();
+  }
+
+  function clearForm() {
+    setEditingId('');
+    setForm(emptyForm);
+  }
+
+  function exportCsv() {
+    const header = ['plate_number', 'car_model', 'memo', 'created_at'];
+    const rows = filteredVehicles.map((vehicle) =>
+      [vehicle.plate_number, vehicle.car_model, vehicle.memo ?? '', vehicle.created_at]
+        .map((value) => `"${String(value).replaceAll('"', '""')}"`)
+        .join(','),
+    );
+    const csv = [header.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'vehicles.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <main className="db-shell">
+      <header className="db-header">
+        <div>
+          <p>Parking DB</p>
+          <h1>차량 DB</h1>
+        </div>
+        <a href="/" aria-label="촬영 화면">
+          <ArrowLeft size={18} />
+          촬영
+        </a>
+      </header>
+
+      {notice && (
+        <div className={`db-notice ${notice.type}`}>
+          <span>{notice.text}</span>
+          <button type="button" onClick={() => setNotice(null)} aria-label="닫기">
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      <section className="db-stats" aria-label="DB 통계">
+        <article>
+          <span>전체</span>
+          <strong>{counts.total}</strong>
+        </article>
+        <article>
+          <span>전체번호</span>
+          <strong>{counts.full}</strong>
+        </article>
+        <article>
+          <span>뒷자리</span>
+          <strong>{counts.partial}</strong>
+        </article>
+      </section>
+
+      <section className="db-panel">
+        <h2>{editingId ? '차량 수정' : '차량 추가'}</h2>
+        <form className="db-form" onSubmit={saveVehicle}>
+          <label>
+            차량번호
+            <input
+              value={form.plate_number}
+              onChange={(event) => setForm({ ...form, plate_number: event.target.value })}
+              placeholder="12가3456 또는 3456"
+            />
+          </label>
+          <label>
+            차종
+            <input
+              value={form.car_model}
+              onChange={(event) => setForm({ ...form, car_model: event.target.value })}
+              placeholder="세단, SUV, 투싼"
+            />
+          </label>
+          <label>
+            메모
+            <input
+              value={form.memo}
+              onChange={(event) => setForm({ ...form, memo: event.target.value })}
+              placeholder="기본 등록 차량"
+            />
+          </label>
+          <div className="db-form-actions">
+            <button type="submit">
+              {editingId ? <Save size={18} /> : <Plus size={18} />}
+              {editingId ? '수정' : '추가'}
+            </button>
+            {editingId && (
+              <button type="button" className="db-secondary" onClick={clearForm}>
+                취소
+              </button>
+            )}
+          </div>
+        </form>
+      </section>
+
+      <section className="db-panel">
+        <div className="db-toolbar">
+          <div className="db-search">
+            <Search size={18} />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="차량번호, 차종, 메모 검색"
+            />
+          </div>
+          <button type="button" className="db-export" onClick={exportCsv}>
+            <Download size={18} />
+            CSV
+          </button>
+        </div>
+
+        <div className="model-summary">
+          {topModels.map(([model, count]) => (
+            <span key={model}>
+              {model} {count}
+            </span>
+          ))}
+        </div>
+
+        <div className="db-list">
+          {loading && <p className="db-empty">불러오는 중입니다.</p>}
+          {!loading && filteredVehicles.length === 0 && (
+            <p className="db-empty">검색 결과가 없습니다.</p>
+          )}
+          {filteredVehicles.map((vehicle) => (
+            <article key={vehicle.id} className="db-row">
+              <div>
+                <strong>{vehicle.plate_number}</strong>
+                <span>{vehicle.car_model}</span>
+                {vehicle.memo && <small>{vehicle.memo}</small>}
+              </div>
+              <div className="db-row-actions">
+                <button type="button" aria-label="수정" onClick={() => editVehicle(vehicle)}>
+                  <Edit3 size={17} />
+                </button>
+                <button type="button" aria-label="삭제" onClick={() => deleteVehicle(vehicle)}>
+                  <Trash2 size={17} />
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+const root = createRoot(document.getElementById('root'));
+
+root.render(window.location.pathname.startsWith('/db') ? <DatabaseApp /> : <CameraApp />);

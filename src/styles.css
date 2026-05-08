@@ -320,3 +320,294 @@ textarea:focus {
     bottom: 116px;
   }
 }
+
+.db-shell {
+  min-height: 100vh;
+  padding: 24px;
+  color: #17211c;
+  background: #f6f4ee;
+  overflow: auto;
+  overscroll-behavior: auto;
+  touch-action: auto;
+}
+
+.db-header,
+.db-stats,
+.db-toolbar,
+.db-form-actions,
+.db-row,
+.db-row-actions,
+.db-notice {
+  display: flex;
+  align-items: center;
+}
+
+.db-header {
+  justify-content: space-between;
+  gap: 18px;
+  width: min(1060px, 100%);
+  margin: 0 auto 18px;
+}
+
+.db-header p {
+  margin: 0 0 5px;
+  color: #66716c;
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.db-header h1 {
+  margin: 0;
+  font-size: clamp(28px, 5vw, 44px);
+}
+
+.db-header a,
+.db-form-actions button,
+.db-export,
+.db-row-actions button,
+.db-notice button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 900;
+}
+
+.db-header a {
+  min-height: 42px;
+  padding: 0 14px;
+  color: #fff;
+  background: #17211c;
+}
+
+.db-notice {
+  justify-content: space-between;
+  gap: 12px;
+  width: min(1060px, 100%);
+  margin: 0 auto 14px;
+  border: 1px solid #d9d2c5;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #fffdf8;
+  color: #17211c;
+  font-weight: 900;
+}
+
+.db-notice.success {
+  border-color: #95cfae;
+  background: #edfbf3;
+  color: #176441;
+}
+
+.db-notice.warning {
+  border-color: #e3c66b;
+  background: #fff9e7;
+  color: #735816;
+}
+
+.db-notice.error {
+  border-color: #e4a0a0;
+  background: #fff0f0;
+  color: #8d2525;
+}
+
+.db-notice button {
+  width: 30px;
+  height: 30px;
+  color: inherit;
+  background: transparent;
+}
+
+.db-stats {
+  gap: 10px;
+  width: min(1060px, 100%);
+  margin: 0 auto 14px;
+}
+
+.db-stats article {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #ddd6c9;
+  border-radius: 8px;
+  padding: 14px;
+  background: #fffdf8;
+}
+
+.db-stats span {
+  display: block;
+  color: #67736d;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.db-stats strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 30px;
+}
+
+.db-panel {
+  width: min(1060px, 100%);
+  margin: 0 auto 14px;
+  border: 1px solid #ddd6c9;
+  border-radius: 8px;
+  padding: 16px;
+  background: #fffdf8;
+  box-shadow: 0 14px 36px rgba(26, 35, 30, 0.08);
+}
+
+.db-panel h2 {
+  margin: 0 0 14px;
+  font-size: 22px;
+}
+
+.db-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.2fr;
+  gap: 12px;
+}
+
+.db-form label {
+  display: grid;
+  gap: 7px;
+  color: #39463f;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.db-form-actions {
+  grid-column: 1 / -1;
+  gap: 8px;
+}
+
+.db-form-actions button,
+.db-export {
+  min-height: 42px;
+  padding: 0 14px;
+  color: #fff;
+  background: #17211c;
+}
+
+.db-form-actions .db-secondary {
+  color: #25362e;
+  background: #e9e3d7;
+}
+
+.db-toolbar {
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.db-search {
+  position: relative;
+  flex: 1;
+}
+
+.db-search svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #66736c;
+}
+
+.db-search input {
+  padding-left: 40px;
+}
+
+.model-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.model-summary span {
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: #425047;
+  background: #eee8dc;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.db-list {
+  display: grid;
+  gap: 8px;
+}
+
+.db-row {
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #e4ded2;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+}
+
+.db-row div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.db-row strong {
+  font-size: 19px;
+}
+
+.db-row span {
+  color: #435048;
+  font-weight: 900;
+}
+
+.db-row small,
+.db-empty {
+  color: #6e7872;
+}
+
+.db-row-actions {
+  gap: 6px;
+}
+
+.db-row-actions button {
+  width: 38px;
+  height: 38px;
+  color: #25362e;
+  background: #eee8dc;
+}
+
+@media (max-width: 720px) {
+  .db-shell {
+    padding: 16px 10px 28px;
+  }
+
+  .db-header {
+    align-items: flex-start;
+  }
+
+  .db-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .db-stats article {
+    padding: 12px;
+  }
+
+  .db-stats strong {
+    font-size: 24px;
+  }
+
+  .db-form,
+  .db-toolbar {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .db-export {
+    width: 100%;
+  }
+}
