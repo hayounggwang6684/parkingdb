@@ -17,8 +17,21 @@ const normalizePlate = (value) =>
 
 const extractPlateCandidate = (text) => {
   const compact = normalizePlate(text);
-  const plate = compact.match(/\d{2,3}[가-힣]\d{4}/)?.[0];
-  return plate ?? compact.slice(0, 12);
+  const fullPlate = compact.match(/\d{2,3}[가-힣]\d{4}/)?.[0];
+  if (fullPlate) return fullPlate;
+
+  const loosePlate = compact.match(/\d{2,3}[가-힣A-Z]\d{4}/)?.[0];
+  if (loosePlate) return loosePlate;
+
+  const lastFour = compact.match(/\d{4}/)?.[0];
+  return lastFour ?? '';
+};
+
+const scorePlateCandidate = (candidate) => {
+  if (/^\d{2,3}[가-힣]\d{4}$/.test(candidate)) return 4;
+  if (/^\d{2,3}[가-힣A-Z]\d{4}$/.test(candidate)) return 3;
+  if (/^\d{4}$/.test(candidate)) return 2;
+  return candidate ? 1 : 0;
 };
 
 const emptyForm = {
@@ -127,7 +140,7 @@ function App() {
     setCapturedImage(image);
 
     try {
-      const plate = await recognizePlate(image);
+      const plate = await recognizePlate(canvas);
       setDetectedPlate(plate);
 
       if (!plate) {
@@ -144,8 +157,9 @@ function App() {
     }
   }
 
-  async function recognizePlate(image) {
+  async function recognizePlate(sourceCanvas) {
     setOcrProgress('OCR 준비 중');
+    const imageCandidates = createOcrImageCandidates(sourceCanvas);
     const worker = await createWorker('kor+eng', 1, {
       logger: (message) => {
         if (message.status === 'recognizing text') {
@@ -155,15 +169,70 @@ function App() {
     });
 
     try {
-      setOcrProgress('OCR 인식 중');
-      const {
-        data: { text },
-      } = await worker.recognize(image);
-      setRawOcrText(text);
-      return extractPlateCandidate(text);
+      const results = [];
+
+      for (let index = 0; index < imageCandidates.length; index += 1) {
+        setOcrProgress(`OCR 인식 중 ${index + 1}/${imageCandidates.length}`);
+        const {
+          data: { text },
+        } = await worker.recognize(imageCandidates[index]);
+        const candidate = extractPlateCandidate(text);
+        results.push({
+          text,
+          candidate,
+          score: scorePlateCandidate(candidate),
+        });
+      }
+
+      const best = results.sort((a, b) => b.score - a.score)[0];
+      setRawOcrText(results.map((result) => result.text).join(' / '));
+      return best?.candidate ?? '';
     } finally {
       await worker.terminate();
     }
+  }
+
+  function createOcrImageCandidates(sourceCanvas) {
+    const cropFrames = [
+      { x: 0, y: 0, width: 1, height: 1 },
+      { x: 0.08, y: 0.42, width: 0.84, height: 0.36 },
+      { x: 0.16, y: 0.5, width: 0.68, height: 0.26 },
+    ];
+
+    return cropFrames.map((frame) => {
+      const outputCanvas = document.createElement('canvas');
+      const targetWidth = 1400;
+      const cropWidth = sourceCanvas.width * frame.width;
+      const cropHeight = sourceCanvas.height * frame.height;
+      outputCanvas.width = targetWidth;
+      outputCanvas.height = Math.round(targetWidth * (cropHeight / cropWidth));
+
+      const context = outputCanvas.getContext('2d', { willReadFrequently: true });
+      context.drawImage(
+        sourceCanvas,
+        sourceCanvas.width * frame.x,
+        sourceCanvas.height * frame.y,
+        cropWidth,
+        cropHeight,
+        0,
+        0,
+        outputCanvas.width,
+        outputCanvas.height,
+      );
+
+      const image = context.getImageData(0, 0, outputCanvas.width, outputCanvas.height);
+      const { data } = image;
+      for (let index = 0; index < data.length; index += 4) {
+        const gray = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
+        const contrast = gray > 145 ? 255 : 0;
+        data[index] = contrast;
+        data[index + 1] = contrast;
+        data[index + 2] = contrast;
+      }
+      context.putImageData(image, 0, 0);
+
+      return outputCanvas.toDataURL('image/png');
+    });
   }
 
   async function checkVehicle(plateNumber) {
