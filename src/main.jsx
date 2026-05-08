@@ -7,12 +7,9 @@ import {
   CheckCircle2,
   CircleAlert,
   Download,
-  Edit3,
   LoaderCircle,
-  Plus,
   Save,
   Search,
-  Trash2,
   X,
 } from 'lucide-react';
 import { supabase, supabaseConfigured } from './supabaseClient';
@@ -588,8 +585,6 @@ function CameraApp() {
 function DatabaseApp() {
   const [vehicles, setVehicles] = useState([]);
   const [query, setQuery] = useState('');
-  const [form, setForm] = useState(emptyForm);
-  const [editingId, setEditingId] = useState('');
   const [notice, setNotice] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -644,71 +639,6 @@ function DatabaseApp() {
     .sort((first, second) => second[1] - first[1])
     .slice(0, 6);
 
-  async function saveVehicle(event) {
-    event.preventDefault();
-    const plateNumber = form.plate_number.trim();
-    const carModel = form.car_model.trim();
-
-    if (!plateNumber || !carModel) {
-      setNotice({ type: 'warning', text: '차량번호와 차종을 입력해 주세요.' });
-      return;
-    }
-
-    const payload = {
-      plate_number: plateNumber,
-      car_model: carModel,
-      memo: form.memo.trim() || null,
-    };
-
-    const request = editingId
-      ? supabase.from('vehicles').update(payload).eq('id', editingId)
-      : supabase.from('vehicles').upsert(payload, {
-          onConflict: 'normalized_plate_number',
-          ignoreDuplicates: false,
-        });
-
-    const { error } = await request;
-
-    if (error) {
-      setNotice({ type: 'error', text: `저장 실패: ${error.message}` });
-      return;
-    }
-
-    setNotice({ type: 'success', text: editingId ? '수정 완료' : '저장 완료' });
-    clearForm();
-    await fetchVehicles();
-  }
-
-  function editVehicle(vehicle) {
-    setEditingId(vehicle.id);
-    setForm({
-      plate_number: vehicle.plate_number,
-      car_model: vehicle.car_model,
-      memo: vehicle.memo ?? '',
-    });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  async function deleteVehicle(vehicle) {
-    const confirmed = window.confirm(`${vehicle.plate_number} 차량을 삭제할까요?`);
-    if (!confirmed) return;
-
-    const { error } = await supabase.from('vehicles').delete().eq('id', vehicle.id);
-
-    if (error) {
-      setNotice({ type: 'error', text: `삭제 실패: ${error.message}` });
-      return;
-    }
-
-    setNotice({ type: 'success', text: '삭제 완료' });
-    await fetchVehicles();
-  }
-
-  function clearForm() {
-    setEditingId('');
-    setForm(emptyForm);
-  }
-
   function exportCsv() {
     const header = ['plate_number', 'car_model', 'memo', 'created_at'];
     const rows = filteredVehicles.map((vehicle) =>
@@ -731,7 +661,7 @@ function DatabaseApp() {
       <header className="db-header">
         <div>
           <p>Parking DB</p>
-          <h1>차량 DB</h1>
+          <h1>차량 DB 조회</h1>
         </div>
         <a href="/" aria-label="촬영 화면">
           <ArrowLeft size={18} />
@@ -764,47 +694,9 @@ function DatabaseApp() {
       </section>
 
       <section className="db-panel">
-        <h2>{editingId ? '차량 수정' : '차량 추가'}</h2>
-        <form className="db-form" onSubmit={saveVehicle}>
-          <label>
-            차량번호
-            <input
-              value={form.plate_number}
-              onChange={(event) => setForm({ ...form, plate_number: event.target.value })}
-              placeholder="12가3456 또는 3456"
-            />
-          </label>
-          <label>
-            차종
-            <input
-              value={form.car_model}
-              onChange={(event) => setForm({ ...form, car_model: event.target.value })}
-              placeholder="세단, SUV, 투싼"
-            />
-          </label>
-          <label>
-            메모
-            <input
-              value={form.memo}
-              onChange={(event) => setForm({ ...form, memo: event.target.value })}
-              placeholder="기본 등록 차량"
-            />
-          </label>
-          <div className="db-form-actions">
-            <button type="submit">
-              {editingId ? <Save size={18} /> : <Plus size={18} />}
-              {editingId ? '수정' : '추가'}
-            </button>
-            {editingId && (
-              <button type="button" className="db-secondary" onClick={clearForm}>
-                취소
-              </button>
-            )}
-          </div>
-        </form>
-      </section>
-
-      <section className="db-panel">
+        <div className="readonly-banner">
+          이 화면은 조회 전용입니다. 차량 추가, 수정, 삭제는 맥 관리 앱에서 처리합니다.
+        </div>
         <div className="db-toolbar">
           <div className="db-search">
             <Search size={18} />
@@ -839,14 +731,6 @@ function DatabaseApp() {
                 <strong>{vehicle.plate_number}</strong>
                 <span>{vehicle.car_model}</span>
                 {vehicle.memo && <small>{vehicle.memo}</small>}
-              </div>
-              <div className="db-row-actions">
-                <button type="button" aria-label="수정" onClick={() => editVehicle(vehicle)}>
-                  <Edit3 size={17} />
-                </button>
-                <button type="button" aria-label="삭제" onClick={() => deleteVehicle(vehicle)}>
-                  <Trash2 size={17} />
-                </button>
               </div>
             </article>
           ))}

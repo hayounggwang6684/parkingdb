@@ -334,9 +334,7 @@ textarea:focus {
 .db-header,
 .db-stats,
 .db-toolbar,
-.db-form-actions,
 .db-row,
-.db-row-actions,
 .db-notice {
   display: flex;
   align-items: center;
@@ -483,17 +481,11 @@ textarea:focus {
   gap: 8px;
 }
 
-.db-form-actions button,
 .db-export {
   min-height: 42px;
   padding: 0 14px;
   color: #fff;
   background: #17211c;
-}
-
-.db-form-actions .db-secondary {
-  color: #25362e;
-  background: #e9e3d7;
 }
 
 .db-toolbar {
@@ -535,6 +527,16 @@ textarea:focus {
   font-weight: 900;
 }
 
+.readonly-banner {
+  margin-bottom: 12px;
+  border: 1px solid #d7d0c3;
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: #46534c;
+  background: #f2eee5;
+  font-weight: 900;
+}
+
 .db-list {
   display: grid;
   gap: 8px;
@@ -568,17 +570,6 @@ textarea:focus {
   color: #6e7872;
 }
 
-.db-row-actions {
-  gap: 6px;
-}
-
-.db-row-actions button {
-  width: 38px;
-  height: 38px;
-  color: #25362e;
-  background: #eee8dc;
-}
-
 @media (max-width: 720px) {
   .db-shell {
     padding: 16px 10px 28px;
@@ -601,7 +592,6 @@ textarea:focus {
     font-size: 24px;
   }
 
-  .db-form,
   .db-toolbar {
     display: grid;
     grid-template-columns: 1fr;
