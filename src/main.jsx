@@ -732,8 +732,8 @@ function DatabaseApp() {
           <article
             key={item.key}
             className={activeFilter === item.key ? 'active' : ''}
-            onDoubleClick={() => setActiveFilter(item.key)}
-            title="더블 클릭하면 해당 차량만 표시됩니다."
+            onClick={() => setActiveFilter(item.key)}
+            title="클릭하면 해당 차량만 표시됩니다."
           >
             <span>{item.label}</span>
             <strong>{counts[item.key === 'all' ? 'total' : item.key]}</strong>
