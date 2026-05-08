@@ -586,6 +586,7 @@ function CameraApp() {
 function DatabaseApp() {
   const [vehicles, setVehicles] = useState([]);
   const [query, setQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState('all');
   const [notice, setNotice] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -613,8 +614,32 @@ function DatabaseApp() {
     setLoading(false);
   }
 
+  const statItems = [
+    { key: 'all', label: '전체 차량' },
+    { key: 'full', label: '전체번호' },
+    { key: 'partial', label: '뒷자리' },
+    { key: 'sedan', label: '세단' },
+    { key: 'suv', label: 'SUV' },
+    { key: 'compact', label: '경차' },
+    { key: 'other', label: '기타' },
+  ];
+
+  function getStatKey(vehicle) {
+    const plate = normalizePlate(vehicle.plate_number);
+    if (activeFilter === 'full') return !/^\d{4}$/.test(plate);
+    if (activeFilter === 'partial') return /^\d{4}$/.test(plate);
+
+    const vehicleType = getVehicleTags(vehicle.car_model).vehicleType;
+    if (activeFilter === 'sedan') return vehicleType === '세단';
+    if (activeFilter === 'suv') return vehicleType === 'SUV';
+    if (activeFilter === 'compact') return vehicleType === '경차';
+    if (activeFilter === 'other') return vehicleType === '기타 차량';
+    return true;
+  }
+
   const filteredVehicles = vehicles.filter((vehicle) => {
     const keyword = normalizePlate(query);
+    if (!getStatKey(vehicle)) return false;
     if (!keyword) return true;
 
     return (
@@ -627,14 +652,21 @@ function DatabaseApp() {
   const counts = vehicles.reduce(
     (summary, vehicle) => {
       const isPartial = /^\d{4}$/.test(normalizePlate(vehicle.plate_number));
+      const vehicleType = getVehicleTags(vehicle.car_model).vehicleType;
       summary.total += 1;
       summary.partial += isPartial ? 1 : 0;
       summary.full += isPartial ? 0 : 1;
+      summary.sedan += vehicleType === '세단' ? 1 : 0;
+      summary.suv += vehicleType === 'SUV' ? 1 : 0;
+      summary.compact += vehicleType === '경차' ? 1 : 0;
+      summary.other += vehicleType === '기타 차량' ? 1 : 0;
       summary.byModel[vehicle.car_model] = (summary.byModel[vehicle.car_model] ?? 0) + 1;
       return summary;
     },
-    { total: 0, full: 0, partial: 0, byModel: {} },
+    { total: 0, full: 0, partial: 0, sedan: 0, suv: 0, compact: 0, other: 0, byModel: {} },
   );
+
+  const activeFilterLabel = statItems.find((item) => item.key === activeFilter)?.label ?? '전체 차량';
 
   const topModels = Object.entries(counts.byModel)
     .sort((first, second) => second[1] - first[1])
@@ -696,18 +728,17 @@ function DatabaseApp() {
       )}
 
       <section className="db-stats" aria-label="DB 통계">
-        <article>
-          <span>전체</span>
-          <strong>{counts.total}</strong>
-        </article>
-        <article>
-          <span>전체번호</span>
-          <strong>{counts.full}</strong>
-        </article>
-        <article>
-          <span>뒷자리</span>
-          <strong>{counts.partial}</strong>
-        </article>
+        {statItems.map((item) => (
+          <article
+            key={item.key}
+            className={activeFilter === item.key ? 'active' : ''}
+            onDoubleClick={() => setActiveFilter(item.key)}
+            title="더블 클릭하면 해당 차량만 표시됩니다."
+          >
+            <span>{item.label}</span>
+            <strong>{counts[item.key === 'all' ? 'total' : item.key]}</strong>
+          </article>
+        ))}
       </section>
 
       <section className="db-panel">
@@ -741,6 +772,11 @@ function DatabaseApp() {
           {loading && <p className="db-empty">불러오는 중입니다.</p>}
           {!loading && filteredVehicles.length === 0 && (
             <p className="db-empty">검색 결과가 없습니다.</p>
+          )}
+          {!loading && filteredVehicles.length > 0 && (
+            <p className="db-list-caption">
+              {activeFilterLabel} {filteredVehicles.length}대
+            </p>
           )}
           {filteredVehicles.map((vehicle) => (
             <article key={vehicle.id} className="db-row">

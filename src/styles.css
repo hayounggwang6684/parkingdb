@@ -423,6 +423,7 @@ textarea:focus {
   gap: 10px;
   width: min(1060px, 100%);
   margin: 0 auto 14px;
+  align-items: stretch;
 }
 
 .db-stats article {
@@ -432,6 +433,19 @@ textarea:focus {
   border-radius: 8px;
   padding: 14px;
   background: #fffdf8;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.db-stats article:hover,
+.db-stats article.active {
+  border-color: #17211c;
+  box-shadow: 0 8px 22px rgba(23, 33, 28, 0.1);
+}
+
+.db-stats article.active {
+  background: #ecf8ef;
 }
 
 .db-stats span {
@@ -542,6 +556,13 @@ textarea:focus {
   gap: 8px;
 }
 
+.db-list-caption {
+  margin: 0 0 2px;
+  color: #4f5d56;
+  font-size: 13px;
+  font-weight: 900;
+}
+
 .db-row {
   justify-content: space-between;
   gap: 12px;
@@ -609,7 +630,7 @@ textarea:focus {
 
   .db-stats {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .db-stats article {
