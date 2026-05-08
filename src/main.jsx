@@ -34,6 +34,15 @@ const scorePlateCandidate = (candidate) => {
   return candidate ? 1 : 0;
 };
 
+const isMissingLeadingPlateDigit = (savedPlate, detectedPlate) => {
+  const savedMatch = savedPlate.match(/^(\d{3})([가-힣])(\d{4})$/);
+  const detectedMatch = detectedPlate.match(/^(\d{2})([가-힣])(\d{4})$/);
+
+  if (!savedMatch || !detectedMatch) return false;
+
+  return `${savedMatch[1].slice(1)}${savedMatch[2]}${savedMatch[3]}` === detectedPlate;
+};
+
 const emptyForm = {
   plate_number: '',
   car_model: '',
@@ -338,26 +347,39 @@ function App() {
       const localMatch = vehicles.find(
         (vehicle) => {
           const savedPlate = normalizePlate(vehicle.plate_number);
-          return savedPlate === normalizedPlate || (lastFourDigits && savedPlate === lastFourDigits);
+          return (
+            savedPlate === normalizedPlate ||
+            isMissingLeadingPlateDigit(savedPlate, normalizedPlate) ||
+            (lastFourDigits && savedPlate === lastFourDigits)
+          );
         },
       );
       handleLookupResult(localMatch, plateNumber);
       return;
     }
 
+    const directCandidates = [normalizedPlate];
+    const missingLeadingMatch = normalizedPlate.match(/^(\d{2})([가-힣])(\d{4})$/);
+
+    if (missingLeadingMatch) {
+      for (let digit = 0; digit <= 9; digit += 1) {
+        directCandidates.push(`${digit}${normalizedPlate}`);
+      }
+    }
+
     const exactResult = await supabase
       .from('vehicles')
       .select('id, plate_number, car_model, memo')
-      .eq('normalized_plate_number', normalizedPlate)
-      .maybeSingle();
+      .in('normalized_plate_number', directCandidates)
+      .limit(1);
 
     if (exactResult.error) {
       setNotice({ type: 'error', text: `등록 여부 확인 실패: ${exactResult.error.message}` });
       return;
     }
 
-    if (exactResult.data || !lastFourDigits) {
-      handleLookupResult(exactResult.data, plateNumber);
+    if (exactResult.data?.length || !lastFourDigits) {
+      handleLookupResult(exactResult.data?.[0] ?? null, plateNumber);
       return;
     }
 
