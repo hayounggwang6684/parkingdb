@@ -19,6 +19,9 @@ import './styles.css';
 const normalizePlate = (value) =>
   value.replace(/[^0-9A-Za-z가-힣]/g, '').toUpperCase();
 
+const isElectricVehicle = (carModel) =>
+  /EV|아이오닉|모델\s*3|넥쏘|코나\s*EV/i.test(carModel ?? '');
+
 const extractPlateCandidate = (text) => {
   const compact = normalizePlate(text);
   const fullPlate = compact.match(/\d{2,3}[가-힣]\d{4}/)?.[0];
@@ -622,6 +625,7 @@ function DatabaseApp() {
     { key: 'suv', label: 'SUV' },
     { key: 'compact', label: '경차' },
     { key: 'other', label: '기타' },
+    { key: 'electric', label: '전기차' },
   ];
 
   function getStatKey(vehicle) {
@@ -634,6 +638,7 @@ function DatabaseApp() {
     if (activeFilter === 'suv') return vehicleType === 'SUV';
     if (activeFilter === 'compact') return vehicleType === '경차';
     if (activeFilter === 'other') return vehicleType === '기타 차량';
+    if (activeFilter === 'electric') return isElectricVehicle(vehicle.car_model);
     return true;
   }
 
@@ -660,10 +665,11 @@ function DatabaseApp() {
       summary.suv += vehicleType === 'SUV' ? 1 : 0;
       summary.compact += vehicleType === '경차' ? 1 : 0;
       summary.other += vehicleType === '기타 차량' ? 1 : 0;
+      summary.electric += isElectricVehicle(vehicle.car_model) ? 1 : 0;
       summary.byModel[vehicle.car_model] = (summary.byModel[vehicle.car_model] ?? 0) + 1;
       return summary;
     },
-    { total: 0, full: 0, partial: 0, sedan: 0, suv: 0, compact: 0, other: 0, byModel: {} },
+    { total: 0, full: 0, partial: 0, sedan: 0, suv: 0, compact: 0, other: 0, electric: 0, byModel: {} },
   );
 
   const activeFilterLabel = statItems.find((item) => item.key === activeFilter)?.label ?? '전체 차량';
