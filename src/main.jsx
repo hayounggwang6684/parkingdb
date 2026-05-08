@@ -44,6 +44,7 @@ function App() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
+  const pinchRef = useRef(null);
 
   const [vehicles, setVehicles] = useState([]);
   const [form, setForm] = useState(emptyForm);
@@ -56,6 +57,13 @@ function App() {
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [registrationOpen, setRegistrationOpen] = useState(false);
+  const [zoomInfo, setZoomInfo] = useState({
+    supported: false,
+    min: 1,
+    max: 1,
+    step: 0.1,
+    value: 1,
+  });
 
   useEffect(() => {
     fetchVehicles();
@@ -107,6 +115,7 @@ function App() {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
+      syncZoomCapabilities(stream);
       setIsCameraReady(true);
     } catch (error) {
       setIsCameraReady(false);
@@ -117,6 +126,92 @@ function App() {
   function stopCamera() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    pinchRef.current = null;
+  }
+
+  function syncZoomCapabilities(stream) {
+    const track = stream.getVideoTracks()[0];
+    const capabilities = track?.getCapabilities?.() ?? {};
+    const settings = track?.getSettings?.() ?? {};
+
+    if (typeof capabilities.zoom !== 'object') {
+      setZoomInfo({
+        supported: false,
+        min: 1,
+        max: 1,
+        step: 0.1,
+        value: 1,
+      });
+      return;
+    }
+
+    const min = capabilities.zoom.min ?? 1;
+    const max = capabilities.zoom.max ?? min;
+    const step = capabilities.zoom.step ?? 0.1;
+    const value = settings.zoom ?? min;
+
+    setZoomInfo({
+      supported: max > min,
+      min,
+      max,
+      step,
+      value,
+    });
+  }
+
+  async function applyCameraZoom(nextZoom) {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track || !zoomInfo.supported) return;
+
+    const clamped = Math.min(zoomInfo.max, Math.max(zoomInfo.min, nextZoom));
+    const rounded = Math.round(clamped / zoomInfo.step) * zoomInfo.step;
+
+    try {
+      await track.applyConstraints({
+        advanced: [{ zoom: rounded }],
+      });
+      setZoomInfo((current) => ({
+        ...current,
+        value: rounded,
+      }));
+    } catch (error) {
+      setZoomInfo((current) => ({
+        ...current,
+        supported: false,
+      }));
+    }
+  }
+
+  function getTouchDistance(touches) {
+    const first = touches[0];
+    const second = touches[1];
+    return Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
+  }
+
+  function handleTouchStart(event) {
+    if (event.touches.length !== 2) return;
+    event.preventDefault();
+    pinchRef.current = {
+      distance: getTouchDistance(event.touches),
+      zoom: zoomInfo.value,
+    };
+  }
+
+  function handleTouchMove(event) {
+    if (event.touches.length !== 2 || !pinchRef.current) return;
+    event.preventDefault();
+
+    if (!zoomInfo.supported) return;
+
+    const distance = getTouchDistance(event.touches);
+    const ratio = distance / pinchRef.current.distance;
+    applyCameraZoom(pinchRef.current.zoom * ratio);
+  }
+
+  function handleTouchEnd(event) {
+    if (event.touches.length < 2) {
+      pinchRef.current = null;
+    }
   }
 
   async function captureAndCheck() {
@@ -353,9 +448,23 @@ function App() {
     setNotice({ type: 'success', text: `${plateNumber} 등록 완료. 계속 촬영할 수 있습니다.` });
   }
 
+  function closeRegistration() {
+    setRegistrationOpen(false);
+    setCapturedImage('');
+    setDetectedPlate('');
+    setRawOcrText('');
+    setNotice(null);
+  }
+
   return (
     <main className="app-shell">
-      <section className="camera-screen">
+      <section
+        className="camera-screen"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+      >
         <video ref={videoRef} autoPlay playsInline muted />
         {capturedImage && <img src={capturedImage} alt="촬영된 차량 전면" />}
 
@@ -401,7 +510,7 @@ function App() {
               <strong>신규 차량 등록</strong>
               <span>OCR 결과를 확인하고 차종을 입력하세요.</span>
             </div>
-            <button type="button" aria-label="닫기" onClick={() => setRegistrationOpen(false)}>
+            <button type="button" aria-label="닫기" onClick={closeRegistration}>
               <X size={19} />
             </button>
           </div>
