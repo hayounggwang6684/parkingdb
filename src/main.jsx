@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { supabase, supabaseConfigured } from './supabaseClient';
+import { getVehicleTags } from './vehicleTags';
 import './styles.css';
 
 const normalizePlate = (value) =>
@@ -640,13 +641,29 @@ function DatabaseApp() {
     .slice(0, 6);
 
   function exportCsv() {
-    const header = ['plate_number', 'car_model', 'memo', 'created_at'];
     const rows = filteredVehicles.map((vehicle) =>
-      [vehicle.plate_number, vehicle.car_model, vehicle.memo ?? '', vehicle.created_at]
+      [
+        vehicle.plate_number,
+        vehicle.car_model,
+        getVehicleTags(vehicle.car_model).vehicleType,
+        getVehicleTags(vehicle.car_model).mechanicalParking,
+        getVehicleTags(vehicle.car_model).mechanicalNote,
+        vehicle.memo ?? '',
+        vehicle.created_at,
+      ]
         .map((value) => `"${String(value).replaceAll('"', '""')}"`)
         .join(','),
     );
-    const csv = [header.join(','), ...rows].join('\n');
+    const csvHeader = [
+      'plate_number',
+      'car_model',
+      'vehicle_type',
+      'mechanical_parking',
+      'mechanical_note',
+      'memo',
+      'created_at',
+    ];
+    const csv = [csvHeader.join(','), ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -731,6 +748,13 @@ function DatabaseApp() {
                 <strong>{vehicle.plate_number}</strong>
                 <span>{vehicle.car_model}</span>
                 {vehicle.memo && <small>{vehicle.memo}</small>}
+              </div>
+              <div className="vehicle-tags">
+                <span>{getVehicleTags(vehicle.car_model).vehicleType}</span>
+                <span className={getVehicleTags(vehicle.car_model).mechanicalParking === '가능' ? 'fit' : 'blocked'}>
+                  기계식 {getVehicleTags(vehicle.car_model).mechanicalParking}
+                </span>
+                <small>{getVehicleTags(vehicle.car_model).mechanicalNote}</small>
               </div>
             </article>
           ))}
