@@ -280,6 +280,11 @@ function CameraApp() {
     });
 
     try {
+      await worker.setParameters({
+        tessedit_pageseg_mode: '7',
+        tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ가나다라마거너더러머버서어저고노도로모보소오조구누두루무부수우주하허호',
+      });
+
       const results = [];
 
       for (let index = 0; index < imageCandidates.length; index += 1) {
@@ -305,9 +310,10 @@ function CameraApp() {
 
   function createOcrImageCandidates(sourceCanvas) {
     const cropFrames = [
+      { x: 0.12, y: 0.42, width: 0.76, height: 0.24 },
+      { x: 0.18, y: 0.46, width: 0.64, height: 0.18 },
+      { x: 0.08, y: 0.38, width: 0.84, height: 0.32 },
       { x: 0, y: 0, width: 1, height: 1 },
-      { x: 0.08, y: 0.42, width: 0.84, height: 0.36 },
-      { x: 0.16, y: 0.5, width: 0.68, height: 0.26 },
     ];
 
     return cropFrames.map((frame) => {
@@ -340,6 +346,7 @@ function CameraApp() {
         data[index + 1] = contrast;
         data[index + 2] = contrast;
       }
+
       context.putImageData(image, 0, 0);
 
       return outputCanvas.toDataURL('image/png');
@@ -496,6 +503,12 @@ function CameraApp() {
       >
         <video ref={videoRef} autoPlay playsInline muted />
         {capturedImage && <img src={capturedImage} alt="촬영된 차량 전면" />}
+
+        {!capturedImage && isCameraReady && (
+          <div className="plate-guide" aria-hidden="true">
+            <span>번호판을 이 안에 맞추세요</span>
+          </div>
+        )}
 
         {!isCameraReady && (
           <div className="camera-empty">

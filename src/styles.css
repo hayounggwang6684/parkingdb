@@ -79,6 +79,62 @@ button:disabled {
     linear-gradient(0deg, rgba(16, 22, 20, 0.86), transparent 42%);
 }
 
+.plate-guide {
+  position: absolute;
+  left: 12%;
+  top: 42%;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 76%;
+  height: 24%;
+  min-height: 104px;
+  border: 3px solid rgba(166, 242, 198, 0.95);
+  border-radius: 8px;
+  color: #eafff1;
+  background: linear-gradient(
+    90deg,
+    rgba(16, 22, 20, 0.62),
+    transparent 18%,
+    transparent 82%,
+    rgba(16, 22, 20, 0.62)
+  );
+  box-shadow: 0 0 0 9999px rgba(7, 10, 9, 0.22);
+  pointer-events: none;
+}
+
+.plate-guide::before,
+.plate-guide::after {
+  content: "";
+  position: absolute;
+  inset: 12px;
+  border-color: #fff;
+  border-style: solid;
+  opacity: 0.78;
+}
+
+.plate-guide::before {
+  border-width: 3px 0;
+}
+
+.plate-guide::after {
+  border-width: 0 3px;
+}
+
+.plate-guide span {
+  position: absolute;
+  top: -38px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: #10231d;
+  background: rgba(166, 242, 198, 0.96);
+  font-size: 13px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
 .capture-panel,
 .result-banner,
 .processing,
