@@ -521,6 +521,7 @@ textarea:focus {
 }
 
 .db-header a,
+.db-back,
 .db-form-actions button,
 .db-export,
 .db-row-actions button,
@@ -534,7 +535,8 @@ textarea:focus {
   font-weight: 900;
 }
 
-.db-header a {
+.db-header a,
+.db-back {
   min-height: 42px;
   padding: 0 14px;
   color: #fff;

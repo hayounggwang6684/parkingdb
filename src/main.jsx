@@ -117,11 +117,24 @@ const emptyForm = {
   memo: '',
 };
 
-function CameraApp() {
+const SWIPE_MIN_DISTANCE = 72;
+const SWIPE_MAX_OFF_AXIS = 90;
+
+function isHorizontalSwipe(start, end) {
+  if (!start || !end) return false;
+
+  const deltaX = end.x - start.x;
+  const deltaY = end.y - start.y;
+
+  return Math.abs(deltaX) >= SWIPE_MIN_DISTANCE && Math.abs(deltaY) <= SWIPE_MAX_OFF_AXIS;
+}
+
+function CameraApp({ onOpenDatabase }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const pinchRef = useRef(null);
+  const swipeRef = useRef(null);
 
   const [vehicles, setVehicles] = useState([]);
   const [form, setForm] = useState(emptyForm);
@@ -266,8 +279,18 @@ function CameraApp() {
   }
 
   function handleTouchStart(event) {
+    if (event.touches.length === 1) {
+      const touch = event.touches[0];
+      swipeRef.current = {
+        x: touch.clientX,
+        y: touch.clientY,
+      };
+      return;
+    }
+
     if (event.touches.length !== 2) return;
     event.preventDefault();
+    swipeRef.current = null;
     pinchRef.current = {
       distance: getTouchDistance(event.touches),
       zoom: zoomInfo.value,
@@ -286,6 +309,21 @@ function CameraApp() {
   }
 
   function handleTouchEnd(event) {
+    if (event.changedTouches.length === 1 && swipeRef.current) {
+      const touch = event.changedTouches[0];
+      const swipeEnd = {
+        x: touch.clientX,
+        y: touch.clientY,
+      };
+      const swipedRight = swipeEnd.x - swipeRef.current.x >= SWIPE_MIN_DISTANCE;
+
+      if (swipedRight && isHorizontalSwipe(swipeRef.current, swipeEnd)) {
+        onOpenDatabase?.();
+      }
+
+      swipeRef.current = null;
+    }
+
     if (event.touches.length < 2) {
       pinchRef.current = null;
     }
@@ -705,7 +743,8 @@ function CameraApp() {
   );
 }
 
-function DatabaseApp() {
+function DatabaseApp({ onCloseCamera }) {
+  const swipeRef = useRef(null);
   const [vehicles, setVehicles] = useState([]);
   const [query, setQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
@@ -830,17 +869,50 @@ function DatabaseApp() {
     URL.revokeObjectURL(url);
   }
 
+  function handleDbTouchStart(event) {
+    if (event.touches.length !== 1) return;
+
+    const touch = event.touches[0];
+    swipeRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+    };
+  }
+
+  function handleDbTouchEnd(event) {
+    if (event.changedTouches.length !== 1 || !swipeRef.current) return;
+
+    const touch = event.changedTouches[0];
+    const swipeEnd = {
+      x: touch.clientX,
+      y: touch.clientY,
+    };
+
+    if (isHorizontalSwipe(swipeRef.current, swipeEnd)) {
+      onCloseCamera?.();
+    }
+
+    swipeRef.current = null;
+  }
+
   return (
-    <main className="db-shell">
+    <main
+      className="db-shell"
+      onTouchStart={handleDbTouchStart}
+      onTouchEnd={handleDbTouchEnd}
+      onTouchCancel={() => {
+        swipeRef.current = null;
+      }}
+    >
       <header className="db-header">
         <div>
           <p>Parking DB</p>
           <h1>차량 DB 조회</h1>
         </div>
-        <a href="/" aria-label="촬영 화면">
+        <button type="button" className="db-back" aria-label="촬영 화면" onClick={onCloseCamera}>
           <ArrowLeft size={18} />
           촬영
-        </a>
+        </button>
       </header>
 
       {notice && (
@@ -1241,9 +1313,21 @@ function MacAdminApp() {
   );
 }
 
+function App() {
+  const [activeView, setActiveView] = useState(
+    window.location.pathname.startsWith('/db') ? 'database' : 'camera',
+  );
+
+  if (activeView === 'database') {
+    return <DatabaseApp onCloseCamera={() => setActiveView('camera')} />;
+  }
+
+  return <CameraApp onOpenDatabase={() => setActiveView('database')} />;
+}
+
 const root = createRoot(document.getElementById('root'));
 
 const urlParams = new URLSearchParams(window.location.search);
 const appMode = urlParams.get('mode');
 
-root.render(appMode === 'admin' ? <MacAdminApp /> : window.location.pathname.startsWith('/db') ? <DatabaseApp /> : <CameraApp />);
+root.render(appMode === 'admin' ? <MacAdminApp /> : <App />);
