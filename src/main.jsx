@@ -118,6 +118,7 @@ const emptyForm = {
 };
 
 const SWIPE_MIN_DISTANCE = 72;
+const SWIPE_ACTIVATE_DISTANCE = 12;
 const SWIPE_MAX_OFF_AXIS = 90;
 
 function isHorizontalSwipe(start, end) {
@@ -129,12 +130,11 @@ function isHorizontalSwipe(start, end) {
   return Math.abs(deltaX) >= SWIPE_MIN_DISTANCE && Math.abs(deltaY) <= SWIPE_MAX_OFF_AXIS;
 }
 
-function CameraApp({ onOpenDatabase }) {
+function CameraApp() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const pinchRef = useRef(null);
-  const swipeRef = useRef(null);
 
   const [vehicles, setVehicles] = useState([]);
   const [form, setForm] = useState(emptyForm);
@@ -279,18 +279,8 @@ function CameraApp({ onOpenDatabase }) {
   }
 
   function handleTouchStart(event) {
-    if (event.touches.length === 1) {
-      const touch = event.touches[0];
-      swipeRef.current = {
-        x: touch.clientX,
-        y: touch.clientY,
-      };
-      return;
-    }
-
     if (event.touches.length !== 2) return;
     event.preventDefault();
-    swipeRef.current = null;
     pinchRef.current = {
       distance: getTouchDistance(event.touches),
       zoom: zoomInfo.value,
@@ -309,21 +299,6 @@ function CameraApp({ onOpenDatabase }) {
   }
 
   function handleTouchEnd(event) {
-    if (event.changedTouches.length === 1 && swipeRef.current) {
-      const touch = event.changedTouches[0];
-      const swipeEnd = {
-        x: touch.clientX,
-        y: touch.clientY,
-      };
-      const swipedRight = swipeEnd.x - swipeRef.current.x >= SWIPE_MIN_DISTANCE;
-
-      if (swipedRight && isHorizontalSwipe(swipeRef.current, swipeEnd)) {
-        onOpenDatabase?.();
-      }
-
-      swipeRef.current = null;
-    }
-
     if (event.touches.length < 2) {
       pinchRef.current = null;
     }
@@ -743,8 +718,8 @@ function CameraApp({ onOpenDatabase }) {
   );
 }
 
-function DatabaseApp({ onCloseCamera }) {
-  const swipeRef = useRef(null);
+function DatabaseApp({ isActive, onCloseCamera }) {
+  const shellRef = useRef(null);
   const [vehicles, setVehicles] = useState([]);
   const [query, setQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
@@ -754,6 +729,12 @@ function DatabaseApp({ onCloseCamera }) {
   useEffect(() => {
     fetchVehicles();
   }, []);
+
+  useEffect(() => {
+    if (isActive) {
+      shellRef.current?.scrollTo({ top: 0, left: 0 });
+    }
+  }, [isActive]);
 
   async function fetchVehicles() {
     if (!supabaseConfigured) {
@@ -869,41 +850,8 @@ function DatabaseApp({ onCloseCamera }) {
     URL.revokeObjectURL(url);
   }
 
-  function handleDbTouchStart(event) {
-    if (event.touches.length !== 1) return;
-
-    const touch = event.touches[0];
-    swipeRef.current = {
-      x: touch.clientX,
-      y: touch.clientY,
-    };
-  }
-
-  function handleDbTouchEnd(event) {
-    if (event.changedTouches.length !== 1 || !swipeRef.current) return;
-
-    const touch = event.changedTouches[0];
-    const swipeEnd = {
-      x: touch.clientX,
-      y: touch.clientY,
-    };
-
-    if (isHorizontalSwipe(swipeRef.current, swipeEnd)) {
-      onCloseCamera?.();
-    }
-
-    swipeRef.current = null;
-  }
-
   return (
-    <main
-      className="db-shell"
-      onTouchStart={handleDbTouchStart}
-      onTouchEnd={handleDbTouchEnd}
-      onTouchCancel={() => {
-        swipeRef.current = null;
-      }}
-    >
+    <main ref={shellRef} className="db-shell">
       <header className="db-header">
         <div>
           <p>Parking DB</p>
@@ -1314,15 +1262,109 @@ function MacAdminApp() {
 }
 
 function App() {
+  const swipeRef = useRef(null);
   const [activeView, setActiveView] = useState(
     window.location.pathname.startsWith('/db') ? 'database' : 'camera',
   );
+  const [dragOffset, setDragOffset] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
 
-  if (activeView === 'database') {
-    return <DatabaseApp onCloseCamera={() => setActiveView('camera')} />;
+  const activeIndex = activeView === 'camera' ? 1 : 0;
+  const trackOffset = `calc(${-activeIndex * 50}% + ${dragOffset}px)`;
+
+  function finishSwipe() {
+    swipeRef.current = null;
+    setIsDragging(false);
+    setDragOffset(0);
   }
 
-  return <CameraApp onOpenDatabase={() => setActiveView('database')} />;
+  function handleTouchStart(event) {
+    if (event.touches.length !== 1) {
+      finishSwipe();
+      return;
+    }
+
+    const touch = event.touches[0];
+    swipeRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      mode: null,
+    };
+  }
+
+  function handleTouchMove(event) {
+    if (event.touches.length !== 1 || !swipeRef.current) return;
+
+    const touch = event.touches[0];
+    const deltaX = touch.clientX - swipeRef.current.x;
+    const deltaY = touch.clientY - swipeRef.current.y;
+
+    if (!swipeRef.current.mode) {
+      if (Math.abs(deltaX) < SWIPE_ACTIVATE_DISTANCE && Math.abs(deltaY) < SWIPE_ACTIVATE_DISTANCE) return;
+      swipeRef.current.mode = Math.abs(deltaX) > Math.abs(deltaY) ? 'horizontal' : 'vertical';
+    }
+
+    if (swipeRef.current.mode !== 'horizontal') return;
+
+    const isAllowedSwipe =
+      (activeView === 'camera' && deltaX > 0) ||
+      (activeView === 'database' && deltaX < 0);
+
+    if (!isAllowedSwipe) {
+      setDragOffset(deltaX * 0.18);
+      return;
+    }
+
+    event.preventDefault();
+    setIsDragging(true);
+    setDragOffset(deltaX);
+  }
+
+  function handleTouchEnd(event) {
+    if (!swipeRef.current) return;
+
+    const touch = event.changedTouches[0];
+    const swipeEnd = {
+      x: touch.clientX,
+      y: touch.clientY,
+    };
+    const deltaX = swipeEnd.x - swipeRef.current.x;
+    const shouldOpenDatabase =
+      activeView === 'camera' &&
+      deltaX >= SWIPE_MIN_DISTANCE &&
+      isHorizontalSwipe(swipeRef.current, swipeEnd);
+    const shouldOpenCamera =
+      activeView === 'database' &&
+      deltaX <= -SWIPE_MIN_DISTANCE &&
+      isHorizontalSwipe(swipeRef.current, swipeEnd);
+
+    if (shouldOpenDatabase) setActiveView('database');
+    if (shouldOpenCamera) setActiveView('camera');
+
+    finishSwipe();
+  }
+
+  return (
+    <main
+      className="view-pager"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={finishSwipe}
+    >
+      <div
+        className={`view-track${isDragging ? ' dragging' : ''}`}
+        style={{ transform: `translate3d(${trackOffset}, 0, 0)` }}
+      >
+        <section className="view-page">
+          <DatabaseApp isActive={activeView === 'database'} onCloseCamera={() => setActiveView('camera')} />
+        </section>
+        <section className="view-page">
+          <CameraApp />
+        </section>
+      </div>
+    </main>
+  );
 }
 
 const root = createRoot(document.getElementById('root'));
