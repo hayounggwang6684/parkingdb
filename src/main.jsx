@@ -47,6 +47,7 @@ const emptyVehicleForm = {
 };
 
 const EDIT_ACCESS_CODE = import.meta.env.VITE_EDIT_ACCESS_CODE || '0000';
+const EDIT_UNLOCK_STORAGE_KEY = 'parking-edit-unlocked';
 
 const correctDigitLikeText = (value) =>
   value.replace(/[OQDILZSB]/g, (char) => digitLikeChars[char] ?? char);
@@ -722,6 +723,7 @@ function CameraApp() {
 
 function DatabaseApp({ isActive, onCloseCamera }) {
   const shellRef = useRef(null);
+  const editUnlockedRef = useRef(sessionStorage.getItem(EDIT_UNLOCK_STORAGE_KEY) === 'true');
   const [vehicles, setVehicles] = useState([]);
   const [query, setQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
@@ -730,7 +732,7 @@ function DatabaseApp({ isActive, onCloseCamera }) {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(emptyVehicleForm);
-  const [editUnlocked, setEditUnlocked] = useState(false);
+  const [editUnlocked, setEditUnlocked] = useState(editUnlockedRef.current);
 
   useEffect(() => {
     fetchVehicles();
@@ -824,7 +826,7 @@ function DatabaseApp({ isActive, onCloseCamera }) {
     .slice(0, 6);
 
   function startEditVehicle(vehicle) {
-    if (!editUnlocked) {
+    if (!editUnlockedRef.current) {
       const code = window.prompt('수정 코드를 입력하세요.');
 
       if (code !== EDIT_ACCESS_CODE) {
@@ -832,6 +834,8 @@ function DatabaseApp({ isActive, onCloseCamera }) {
         return;
       }
 
+      editUnlockedRef.current = true;
+      sessionStorage.setItem(EDIT_UNLOCK_STORAGE_KEY, 'true');
       setEditUnlocked(true);
     }
 
