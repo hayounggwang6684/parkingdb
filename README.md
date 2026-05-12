@@ -20,13 +20,13 @@ npm install
 npm run dev
 ```
 
-## Netlify 자동 배포 설정
+## Cloudflare Pages 자동 배포 설정
 
-Netlify에서 GitHub 저장소를 연결할 때 아래 값을 사용합니다.
+Cloudflare Pages에서 GitHub 저장소를 연결할 때 아래 값을 사용합니다.
 
 ```text
 Build command: npm run build
-Publish directory: dist
+Build output directory: dist
 ```
 
 환경 변수에는 아래 두 값을 추가합니다.
@@ -34,6 +34,12 @@ Publish directory: dist
 ```text
 VITE_SUPABASE_URL
 VITE_SUPABASE_PUBLISHABLE_KEY
+```
+
+직접 업로드 배포가 필요하면 Cloudflare 로그인 후 아래 명령을 사용합니다.
+
+```bash
+npm run deploy:cloudflare
 ```
 
 ## MVP 흐름

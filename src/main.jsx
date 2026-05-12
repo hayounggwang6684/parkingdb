@@ -604,8 +604,11 @@ function CameraApp() {
 
         {!capturedImage && isCameraReady && (
           <div className="plate-guide" aria-hidden="true">
-            <span>번호판을 가로로 꽉 맞추세요</span>
-            <ul>
+            <span className="plate-guide__label">번호판을 프레임 안에 맞추세요</span>
+            <div className="plate-guide__window">
+              <span className="plate-guide__sample">12가3456</span>
+            </div>
+            <ul className="plate-guide__tips">
               <li>정면</li>
               <li>흔들림 없이</li>
               <li>빛 반사 피하기</li>

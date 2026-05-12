@@ -8,6 +8,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
+    "deploy:cloudflare": "npm run build && npx wrangler pages deploy dist --project-name parkingdb",
     "mac:dev": "vite build && electron electron/main.cjs",
     "mac:dist": "vite build && electron-builder --mac dmg"
   },
