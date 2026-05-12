@@ -796,6 +796,60 @@ textarea:focus {
   font-weight: 900;
 }
 
+.mobile-edit-form {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  border: 1px solid #cfe5d7;
+  border-radius: 8px;
+  padding: 12px;
+  background: #eef9f2;
+}
+
+.mobile-edit-form__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mobile-edit-form__header strong {
+  font-size: 18px;
+}
+
+.mobile-edit-form__header button {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  color: #17211c;
+  background: #dcefe4;
+}
+
+.mobile-edit-form label {
+  display: grid;
+  gap: 6px;
+  color: #39463f;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.mobile-edit-form textarea {
+  min-height: 70px;
+}
+
+.mobile-edit-form .db-form-actions button {
+  min-height: 42px;
+  border-radius: 8px;
+  padding: 0 14px;
+  color: #10231d;
+  background: #a6f2c6;
+  font-weight: 950;
+}
+
+.mobile-edit-form .db-form-actions button[type="button"] {
+  background: #e7e2d6;
+}
+
 .db-list {
   display: grid;
   gap: 8px;

@@ -11,6 +11,7 @@ Supabase에 차량 DB를 저장하고, 모바일 웹 카메라 화면에서 차�
 ```bash
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-or-anon-key
+VITE_EDIT_ACCESS_CODE=0000
 ```
 
 ## 실행
@@ -34,6 +35,7 @@ Build output directory: dist
 ```text
 VITE_SUPABASE_URL
 VITE_SUPABASE_PUBLISHABLE_KEY
+VITE_EDIT_ACCESS_CODE
 ```
 
 직접 업로드 배포가 필요하면 Cloudflare 로그인 후 아래 명령을 사용합니다.

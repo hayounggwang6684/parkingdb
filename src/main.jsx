@@ -46,6 +46,8 @@ const emptyVehicleForm = {
   memo: '',
 };
 
+const EDIT_ACCESS_CODE = import.meta.env.VITE_EDIT_ACCESS_CODE || '0000';
+
 const correctDigitLikeText = (value) =>
   value.replace(/[OQDILZSB]/g, (char) => digitLikeChars[char] ?? char);
 
@@ -725,6 +727,10 @@ function DatabaseApp({ isActive, onCloseCamera }) {
   const [activeFilter, setActiveFilter] = useState('all');
   const [notice, setNotice] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState(emptyVehicleForm);
+  const [editUnlocked, setEditUnlocked] = useState(false);
 
   useEffect(() => {
     fetchVehicles();
@@ -817,6 +823,61 @@ function DatabaseApp({ isActive, onCloseCamera }) {
     .sort((first, second) => second[1] - first[1])
     .slice(0, 6);
 
+  function startEditVehicle(vehicle) {
+    if (!editUnlocked) {
+      const code = window.prompt('수정 코드를 입력하세요.');
+
+      if (code !== EDIT_ACCESS_CODE) {
+        setNotice({ type: 'warning', text: '수정 코드가 맞지 않습니다.' });
+        return;
+      }
+
+      setEditUnlocked(true);
+    }
+
+    setEditingId(vehicle.id);
+    setEditForm({
+      plate_number: vehicle.plate_number,
+      car_model: vehicle.car_model,
+      memo: vehicle.memo ?? '',
+    });
+    setNotice(null);
+  }
+
+  function cancelEditVehicle() {
+    setEditingId(null);
+    setEditForm(emptyVehicleForm);
+  }
+
+  async function saveEditedVehicle(event) {
+    event.preventDefault();
+
+    const payload = {
+      plate_number: editForm.plate_number.trim(),
+      car_model: editForm.car_model.trim(),
+      memo: editForm.memo.trim() || null,
+    };
+
+    if (!payload.plate_number || !payload.car_model) {
+      setNotice({ type: 'warning', text: '차량번호와 차종을 입력해 주세요.' });
+      return;
+    }
+
+    setSaving(true);
+    const { error } = await supabase.from('vehicles').update(payload).eq('id', editingId);
+    setSaving(false);
+
+    if (error) {
+      const message = error.code === '23505' ? '이미 등록된 차량번호입니다.' : error.message;
+      setNotice({ type: 'error', text: `수정 실패: ${message}` });
+      return;
+    }
+
+    cancelEditVehicle();
+    await fetchVehicles();
+    setNotice({ type: 'success', text: '차량 정보가 수정되었습니다.' });
+  }
+
   function exportCsv() {
     const rows = filteredVehicles.map((vehicle) =>
       [
@@ -888,8 +949,54 @@ function DatabaseApp({ isActive, onCloseCamera }) {
 
       <section className="db-panel">
         <div className="readonly-banner">
-          이 화면은 조회 전용입니다. 차량 추가, 수정, 삭제는 맥 관리 앱에서 처리합니다.
+          차량 정보를 선택해 바로 수정할 수 있습니다.
         </div>
+
+        {editingId && (
+          <form className="mobile-edit-form" onSubmit={saveEditedVehicle}>
+            <div className="mobile-edit-form__header">
+              <strong>차량 정보 수정</strong>
+              <button type="button" onClick={cancelEditVehicle} aria-label="수정 취소">
+                <X size={16} />
+              </button>
+            </div>
+            <label>
+              차량번호
+              <input
+                value={editForm.plate_number}
+                onChange={(event) => setEditForm({ ...editForm, plate_number: event.target.value })}
+                placeholder="12가3456 또는 1234"
+              />
+            </label>
+            <label>
+              차종
+              <input
+                value={editForm.car_model}
+                onChange={(event) => setEditForm({ ...editForm, car_model: event.target.value })}
+                placeholder="아반떼"
+              />
+            </label>
+            <label>
+              메모
+              <textarea
+                value={editForm.memo}
+                onChange={(event) => setEditForm({ ...editForm, memo: event.target.value })}
+                placeholder="방문 목적, 위치 등"
+              />
+            </label>
+            <div className="db-form-actions">
+              <button type="submit" disabled={saving}>
+                <Save size={18} />
+                {saving ? '저장 중' : '수정 저장'}
+              </button>
+              <button type="button" onClick={cancelEditVehicle}>
+                <X size={18} />
+                취소
+              </button>
+            </div>
+          </form>
+        )}
+
         <div className="db-toolbar">
           <div className="db-search">
             <Search size={18} />
@@ -936,6 +1043,11 @@ function DatabaseApp({ isActive, onCloseCamera }) {
                   기계식 {getVehicleTags(vehicle.car_model).mechanicalParking}
                 </span>
                 <small>{getVehicleTags(vehicle.car_model).mechanicalNote}</small>
+              </div>
+              <div className="db-row-actions">
+                <button type="button" onClick={() => startEditVehicle(vehicle)} aria-label="수정">
+                  <Pencil size={16} />
+                </button>
               </div>
             </article>
           ))}
