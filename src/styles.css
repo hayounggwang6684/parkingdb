@@ -81,13 +81,13 @@ button:disabled {
 
 .plate-guide {
   position: absolute;
-  left: 12%;
-  top: 42%;
+  left: 10%;
+  top: 40%;
   z-index: 2;
   display: grid;
   place-items: center;
-  width: 76%;
-  height: 24%;
+  width: 80%;
+  height: 26%;
   min-height: 104px;
   border: 3px solid rgba(166, 242, 198, 0.95);
   border-radius: 8px;
@@ -133,6 +133,30 @@ button:disabled {
   font-size: 13px;
   font-weight: 950;
   white-space: nowrap;
+}
+
+.plate-guide ul {
+  position: absolute;
+  right: 0;
+  bottom: -42px;
+  left: 0;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plate-guide li {
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: #eafff1;
+  background: rgba(11, 17, 15, 0.72);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
 }
 
 .capture-panel,
@@ -527,6 +551,58 @@ textarea:focus {
   box-shadow: 0 14px 36px rgba(26, 35, 30, 0.08);
 }
 
+.mac-shell .db-header,
+.mac-shell .db-stats,
+.mac-shell .admin-layout {
+  width: min(1280px, 100%);
+}
+
+.admin-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) 1fr;
+  gap: 14px;
+  margin: 0 auto 14px;
+  align-items: start;
+}
+
+.admin-form {
+  position: sticky;
+  top: 14px;
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+
+.admin-form label {
+  display: grid;
+  gap: 7px;
+  color: #39463f;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.admin-form textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.admin-form .db-form-actions button {
+  min-height: 42px;
+  border-radius: 8px;
+  padding: 0 14px;
+  color: #10231d;
+  background: #a6f2c6;
+  font-weight: 950;
+}
+
+.admin-form .db-form-actions button[type="button"] {
+  background: #e7e2d6;
+}
+
+.admin-list-panel {
+  width: 100%;
+}
+
 .db-panel h2 {
   margin: 0 0 14px;
   font-size: 22px;
@@ -628,6 +704,12 @@ textarea:focus {
   background: #fff;
 }
 
+.admin-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(220px, auto) auto;
+  align-items: center;
+}
+
 .db-row div:first-child {
   display: grid;
   gap: 3px;
@@ -645,6 +727,20 @@ textarea:focus {
 .db-row small,
 .db-empty {
   color: #6e7872;
+}
+
+.db-row-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.db-row-actions button {
+  width: 38px;
+  height: 38px;
+  border: 1px solid #ded7cb;
+  border-radius: 8px;
+  color: #17211c;
+  background: #f7f4ec;
 }
 
 .vehicle-tags {
@@ -704,5 +800,21 @@ textarea:focus {
 
   .db-export {
     width: 100%;
+  }
+
+  .admin-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-form {
+    position: static;
+  }
+
+  .admin-row {
+    grid-template-columns: 1fr;
+  }
+
+  .db-row-actions {
+    justify-content: flex-start;
   }
 }

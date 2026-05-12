@@ -8,8 +8,12 @@ import {
   CircleAlert,
   Download,
   LoaderCircle,
+  Pencil,
+  Plus,
+  RefreshCw,
   Save,
   Search,
+  Trash2,
   X,
 } from 'lucide-react';
 import { supabase, supabaseConfigured } from './supabaseClient';
@@ -19,19 +23,76 @@ import './styles.css';
 const normalizePlate = (value) =>
   value.replace(/[^0-9A-Za-z가-힣]/g, '').toUpperCase();
 
+const PLATE_OCR_WHITELIST =
+  '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ가나다라마거너더러머버서어저고노도로모보소오조구누두루무부수우주하허호';
+
+const digitLikeChars = {
+  O: '0',
+  Q: '0',
+  D: '0',
+  I: '1',
+  L: '1',
+  Z: '2',
+  S: '5',
+  B: '8',
+};
+
 const isElectricVehicle = (carModel) =>
   /EV|아이오닉|모델\s*3|넥쏘|코나\s*EV/i.test(carModel ?? '');
 
-const extractPlateCandidate = (text) => {
+const emptyVehicleForm = {
+  plate_number: '',
+  car_model: '',
+  memo: '',
+};
+
+const correctDigitLikeText = (value) =>
+  value.replace(/[OQDILZSB]/g, (char) => digitLikeChars[char] ?? char);
+
+const getPlateVariants = (text) => {
   const compact = normalizePlate(text);
-  const fullPlate = compact.match(/\d{2,3}[가-힣]\d{4}/)?.[0];
-  if (fullPlate) return fullPlate;
+  return [...new Set([compact, correctDigitLikeText(compact)])];
+};
 
-  const loosePlate = compact.match(/\d{2,3}[가-힣A-Z]\d{4}/)?.[0];
-  if (loosePlate) return loosePlate;
+const extractPlateCandidates = (text) => {
+  const candidates = new Set();
 
-  const lastFour = compact.match(/\d{4}/)?.[0];
-  return lastFour ?? '';
+  getPlateVariants(text).forEach((compact) => {
+    compact.match(/\d{2,3}[가-힣]\d{4}/g)?.forEach((candidate) => candidates.add(candidate));
+    compact.match(/\d{2,3}[가-힣A-Z]\d{4}/g)?.forEach((candidate) => candidates.add(candidate));
+    compact.match(/\d{4}/g)?.forEach((candidate) => candidates.add(candidate));
+  });
+
+  return [...candidates];
+};
+
+const extractPlateCandidate = (text) => {
+  const candidates = extractPlateCandidates(text);
+  const best = candidates.sort((a, b) => scorePlateCandidate(b) - scorePlateCandidate(a))[0];
+  return best ?? '';
+};
+
+const scoreKnownPlateCandidate = (candidate, savedVehicles) => {
+  const normalizedCandidate = normalizePlate(candidate);
+  const lastFourDigits = normalizedCandidate.match(/\d{4}$/)?.[0] ?? '';
+
+  if (!normalizedCandidate) return 0;
+
+  return savedVehicles.reduce((score, vehicle) => {
+    const savedPlate = normalizePlate(vehicle.plate_number ?? '');
+
+    if (savedPlate === normalizedCandidate) return Math.max(score, 8);
+    if (isMissingLeadingPlateDigit(savedPlate, normalizedCandidate)) return Math.max(score, 7);
+    if (lastFourDigits && savedPlate === lastFourDigits) return Math.max(score, 6);
+    if (lastFourDigits && savedPlate.endsWith(lastFourDigits)) return Math.max(score, 4);
+
+    return score;
+  }, 0);
+};
+
+const scoreOcrCandidate = (candidate, savedVehicles) => {
+  if (!candidate) return 0;
+  return scorePlateCandidate(candidate) + scoreKnownPlateCandidate(candidate, savedVehicles);
 };
 
 const scorePlateCandidate = (candidate) => {
@@ -282,26 +343,32 @@ function CameraApp() {
     try {
       await worker.setParameters({
         tessedit_pageseg_mode: '7',
-        tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ가나다라마거너더러머버서어저고노도로모보소오조구누두루무부수우주하허호',
+        tessedit_char_whitelist: PLATE_OCR_WHITELIST,
+        preserve_interword_spaces: '1',
       });
 
       const results = [];
+      const rawTexts = [];
 
       for (let index = 0; index < imageCandidates.length; index += 1) {
         setOcrProgress(`OCR 인식 중 ${index + 1}/${imageCandidates.length}`);
         const {
           data: { text },
         } = await worker.recognize(imageCandidates[index]);
-        const candidate = extractPlateCandidate(text);
-        results.push({
-          text,
-          candidate,
-          score: scorePlateCandidate(candidate),
+        const candidates = extractPlateCandidates(text);
+        rawTexts.push(text);
+
+        candidates.forEach((candidate) => {
+          results.push({
+            text,
+            candidate,
+            score: scoreOcrCandidate(candidate, vehicles),
+          });
         });
       }
 
       const best = results.sort((a, b) => b.score - a.score)[0];
-      setRawOcrText(results.map((result) => result.text).join(' / '));
+      setRawOcrText(rawTexts.join(' / '));
       return best?.candidate ?? '';
     } finally {
       await worker.terminate();
@@ -310,13 +377,13 @@ function CameraApp() {
 
   function createOcrImageCandidates(sourceCanvas) {
     const cropFrames = [
-      { x: 0.12, y: 0.42, width: 0.76, height: 0.24 },
-      { x: 0.18, y: 0.46, width: 0.64, height: 0.18 },
-      { x: 0.08, y: 0.38, width: 0.84, height: 0.32 },
-      { x: 0, y: 0, width: 1, height: 1 },
+      { x: 0.1, y: 0.4, width: 0.8, height: 0.26 },
+      { x: 0.16, y: 0.43, width: 0.68, height: 0.22 },
+      { x: 0.08, y: 0.36, width: 0.84, height: 0.34 },
+      { x: 0.02, y: 0.28, width: 0.96, height: 0.5 },
     ];
 
-    return cropFrames.map((frame) => {
+    return cropFrames.flatMap((frame) => {
       const outputCanvas = document.createElement('canvas');
       const targetWidth = 1400;
       const cropWidth = sourceCanvas.width * frame.width;
@@ -337,18 +404,34 @@ function CameraApp() {
         outputCanvas.height,
       );
 
+      return createPreprocessedOcrImages(outputCanvas);
+    });
+  }
+
+  function createPreprocessedOcrImages(sourceCanvas) {
+    const modes = ['gray', 'binary', 'binaryDark'];
+
+    return modes.map((mode) => {
+      const outputCanvas = document.createElement('canvas');
+      outputCanvas.width = sourceCanvas.width;
+      outputCanvas.height = sourceCanvas.height;
+
+      const context = outputCanvas.getContext('2d', { willReadFrequently: true });
+      context.drawImage(sourceCanvas, 0, 0);
+
       const image = context.getImageData(0, 0, outputCanvas.width, outputCanvas.height);
       const { data } = image;
       for (let index = 0; index < data.length; index += 4) {
         const gray = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
         const contrast = gray > 145 ? 255 : 0;
-        data[index] = contrast;
-        data[index + 1] = contrast;
-        data[index + 2] = contrast;
+        const value = mode === 'gray' ? gray : mode === 'binaryDark' ? 255 - contrast : contrast;
+
+        data[index] = value;
+        data[index + 1] = value;
+        data[index + 2] = value;
       }
 
       context.putImageData(image, 0, 0);
-
       return outputCanvas.toDataURL('image/png');
     });
   }
@@ -356,19 +439,15 @@ function CameraApp() {
   async function checkVehicle(plateNumber) {
     const normalizedPlate = normalizePlate(plateNumber);
     const lastFourDigits = normalizedPlate.match(/\d{4}$/)?.[0] ?? '';
+    const localMatch = findLocalVehicleMatch(normalizedPlate, lastFourDigits);
+
+    if (localMatch) {
+      handleLookupResult(localMatch, plateNumber);
+      return;
+    }
 
     if (!supabaseConfigured) {
-      const localMatch = vehicles.find(
-        (vehicle) => {
-          const savedPlate = normalizePlate(vehicle.plate_number);
-          return (
-            savedPlate === normalizedPlate ||
-            isMissingLeadingPlateDigit(savedPlate, normalizedPlate) ||
-            (lastFourDigits && savedPlate === lastFourDigits)
-          );
-        },
-      );
-      handleLookupResult(localMatch, plateNumber);
+      handleLookupResult(null, plateNumber);
       return;
     }
 
@@ -409,6 +488,25 @@ function CameraApp() {
     }
 
     handleLookupResult(partialResult.data, plateNumber);
+  }
+
+  function findLocalVehicleMatch(normalizedPlate, lastFourDigits) {
+    const exactMatch = vehicles.find((vehicle) => {
+      const savedPlate = normalizePlate(vehicle.plate_number);
+      return (
+        savedPlate === normalizedPlate ||
+        isMissingLeadingPlateDigit(savedPlate, normalizedPlate) ||
+        (lastFourDigits && savedPlate === lastFourDigits)
+      );
+    });
+
+    if (exactMatch || !lastFourDigits) return exactMatch ?? null;
+
+    const lastFourMatches = vehicles.filter((vehicle) =>
+      normalizePlate(vehicle.plate_number).endsWith(lastFourDigits),
+    );
+
+    return lastFourMatches.length === 1 ? lastFourMatches[0] : null;
   }
 
   function handleLookupResult(vehicle, plateNumber) {
@@ -506,7 +604,12 @@ function CameraApp() {
 
         {!capturedImage && isCameraReady && (
           <div className="plate-guide" aria-hidden="true">
-            <span>번호판을 이 안에 맞추세요</span>
+            <span>번호판을 가로로 꽉 맞추세요</span>
+            <ul>
+              <li>정면</li>
+              <li>흔들림 없이</li>
+              <li>빛 반사 피하기</li>
+            </ul>
           </div>
         )}
 
@@ -819,6 +922,325 @@ function DatabaseApp() {
   );
 }
 
+function MacAdminApp() {
+  const [vehicles, setVehicles] = useState([]);
+  const [query, setQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState('all');
+  const [notice, setNotice] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState(emptyVehicleForm);
+
+  useEffect(() => {
+    fetchVehicles();
+  }, []);
+
+  async function fetchVehicles() {
+    if (!supabaseConfigured) {
+      setNotice({ type: 'error', text: 'Supabase 연결 설정이 필요합니다.' });
+      return;
+    }
+
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('vehicles')
+      .select('id, plate_number, normalized_plate_number, car_model, memo, created_at, updated_at')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      setNotice({ type: 'error', text: `DB 조회 실패: ${error.message}` });
+    } else {
+      setVehicles(data ?? []);
+      setNotice(null);
+    }
+    setLoading(false);
+  }
+
+  const statItems = [
+    { key: 'all', label: '전체 차량' },
+    { key: 'full', label: '전체번호' },
+    { key: 'partial', label: '뒷자리' },
+    { key: 'sedan', label: '세단' },
+    { key: 'suv', label: 'SUV' },
+    { key: 'compact', label: '경차' },
+    { key: 'other', label: '기타' },
+    { key: 'electric', label: '전기차' },
+    { key: 'blocked', label: '기계식 불가' },
+  ];
+
+  function matchesFilter(vehicle) {
+    const plate = normalizePlate(vehicle.plate_number);
+    if (activeFilter === 'full') return !/^\d{4}$/.test(plate);
+    if (activeFilter === 'partial') return /^\d{4}$/.test(plate);
+
+    const tags = getVehicleTags(vehicle.car_model);
+    if (activeFilter === 'sedan') return tags.vehicleType === '세단';
+    if (activeFilter === 'suv') return tags.vehicleType === 'SUV';
+    if (activeFilter === 'compact') return tags.vehicleType === '경차';
+    if (activeFilter === 'other') return tags.vehicleType === '기타 차량';
+    if (activeFilter === 'electric') return isElectricVehicle(vehicle.car_model);
+    if (activeFilter === 'blocked') return tags.mechanicalParking === '불가능';
+    return true;
+  }
+
+  const filteredVehicles = vehicles.filter((vehicle) => {
+    const keyword = normalizePlate(query);
+    if (!matchesFilter(vehicle)) return false;
+    if (!keyword) return true;
+
+    return (
+      normalizePlate(vehicle.plate_number).includes(keyword) ||
+      normalizePlate(vehicle.car_model).includes(keyword) ||
+      normalizePlate(vehicle.memo ?? '').includes(keyword)
+    );
+  });
+
+  const counts = vehicles.reduce(
+    (summary, vehicle) => {
+      const plate = normalizePlate(vehicle.plate_number);
+      const tags = getVehicleTags(vehicle.car_model);
+      const isPartial = /^\d{4}$/.test(plate);
+      summary.total += 1;
+      summary.partial += isPartial ? 1 : 0;
+      summary.full += isPartial ? 0 : 1;
+      summary.sedan += tags.vehicleType === '세단' ? 1 : 0;
+      summary.suv += tags.vehicleType === 'SUV' ? 1 : 0;
+      summary.compact += tags.vehicleType === '경차' ? 1 : 0;
+      summary.other += tags.vehicleType === '기타 차량' ? 1 : 0;
+      summary.electric += isElectricVehicle(vehicle.car_model) ? 1 : 0;
+      summary.blocked += tags.mechanicalParking === '불가능' ? 1 : 0;
+      return summary;
+    },
+    { total: 0, full: 0, partial: 0, sedan: 0, suv: 0, compact: 0, other: 0, electric: 0, blocked: 0 },
+  );
+
+  const activeFilterLabel = statItems.find((item) => item.key === activeFilter)?.label ?? '전체 차량';
+
+  function resetForm() {
+    setEditingId(null);
+    setForm(emptyVehicleForm);
+  }
+
+  function editVehicle(vehicle) {
+    setEditingId(vehicle.id);
+    setForm({
+      plate_number: vehicle.plate_number,
+      car_model: vehicle.car_model,
+      memo: vehicle.memo ?? '',
+    });
+  }
+
+  async function saveVehicle(event) {
+    event.preventDefault();
+    const payload = {
+      plate_number: form.plate_number.trim(),
+      car_model: form.car_model.trim(),
+      memo: form.memo.trim() || null,
+    };
+
+    if (!payload.plate_number || !payload.car_model) {
+      setNotice({ type: 'warning', text: '차량번호와 차종을 입력해 주세요.' });
+      return;
+    }
+
+    setSaving(true);
+    const request = editingId
+      ? supabase.from('vehicles').update(payload).eq('id', editingId)
+      : supabase.from('vehicles').insert(payload);
+    const { error } = await request;
+    setSaving(false);
+
+    if (error) {
+      const message = error.code === '23505' ? '이미 등록된 차량번호입니다.' : error.message;
+      setNotice({ type: 'error', text: `저장 실패: ${message}` });
+      return;
+    }
+
+    resetForm();
+    await fetchVehicles();
+    setNotice({ type: 'success', text: '저장 완료' });
+  }
+
+  async function deleteVehicle(vehicle) {
+    const confirmed = window.confirm(`${vehicle.plate_number} 차량을 삭제할까요?`);
+    if (!confirmed) return;
+
+    const { error } = await supabase.from('vehicles').delete().eq('id', vehicle.id);
+    if (error) {
+      setNotice({ type: 'error', text: `삭제 실패: ${error.message}` });
+      return;
+    }
+
+    if (editingId === vehicle.id) resetForm();
+    await fetchVehicles();
+    setNotice({ type: 'success', text: '삭제 완료' });
+  }
+
+  function exportCsv() {
+    const rows = filteredVehicles.map((vehicle) =>
+      [
+        vehicle.plate_number,
+        vehicle.car_model,
+        getVehicleTags(vehicle.car_model).vehicleType,
+        getVehicleTags(vehicle.car_model).mechanicalParking,
+        getVehicleTags(vehicle.car_model).mechanicalNote,
+        vehicle.memo ?? '',
+        vehicle.created_at,
+      ]
+        .map((value) => `"${String(value).replaceAll('"', '""')}"`)
+        .join(','),
+    );
+    const csv = [
+      'plate_number,car_model,vehicle_type,mechanical_parking,mechanical_note,memo,created_at',
+      ...rows,
+    ].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'vehicles.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <main className="db-shell mac-shell">
+      <header className="db-header">
+        <div>
+          <p>Mac Admin</p>
+          <h1>주차 차량 DB 관리</h1>
+        </div>
+        <button type="button" className="db-export" onClick={fetchVehicles}>
+          <RefreshCw size={18} />
+          새로고침
+        </button>
+      </header>
+
+      {notice && (
+        <div className={`db-notice ${notice.type}`}>
+          <span>{notice.text}</span>
+          <button type="button" onClick={() => setNotice(null)} aria-label="닫기">
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      <section className="db-stats" aria-label="DB 통계">
+        {statItems.map((item) => (
+          <article
+            key={item.key}
+            className={activeFilter === item.key ? 'active' : ''}
+            onClick={() => setActiveFilter(item.key)}
+          >
+            <span>{item.label}</span>
+            <strong>{counts[item.key === 'all' ? 'total' : item.key]}</strong>
+          </article>
+        ))}
+      </section>
+
+      <section className="admin-layout">
+        <form className="db-panel admin-form" onSubmit={saveVehicle}>
+          <h2>{editingId ? '차량 수정' : '차량 추가'}</h2>
+          <label>
+            차량번호
+            <input
+              value={form.plate_number}
+              onChange={(event) => setForm({ ...form, plate_number: event.target.value })}
+              placeholder="12가3456 또는 1234"
+            />
+          </label>
+          <label>
+            차종
+            <input
+              value={form.car_model}
+              onChange={(event) => setForm({ ...form, car_model: event.target.value })}
+              placeholder="뉴싼타페"
+            />
+          </label>
+          <label>
+            메모
+            <textarea
+              value={form.memo}
+              onChange={(event) => setForm({ ...form, memo: event.target.value })}
+              placeholder="주차장 위치, 특이사항"
+            />
+          </label>
+          <div className="db-form-actions">
+            <button type="submit" disabled={saving}>
+              {editingId ? <Save size={18} /> : <Plus size={18} />}
+              {saving ? '저장 중' : editingId ? '수정 저장' : '추가'}
+            </button>
+            {editingId && (
+              <button type="button" onClick={resetForm}>
+                <X size={18} />
+                취소
+              </button>
+            )}
+          </div>
+        </form>
+
+        <section className="db-panel admin-list-panel">
+          <div className="db-toolbar">
+            <div className="db-search">
+              <Search size={18} />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="차량번호, 차종, 메모 검색"
+              />
+            </div>
+            <button type="button" className="db-export" onClick={exportCsv}>
+              <Download size={18} />
+              CSV
+            </button>
+          </div>
+
+          <div className="db-list">
+            {loading && <p className="db-empty">불러오는 중입니다.</p>}
+            {!loading && filteredVehicles.length === 0 && <p className="db-empty">검색 결과가 없습니다.</p>}
+            {!loading && filteredVehicles.length > 0 && (
+              <p className="db-list-caption">
+                {activeFilterLabel} {filteredVehicles.length}대
+              </p>
+            )}
+            {filteredVehicles.map((vehicle) => {
+              const tags = getVehicleTags(vehicle.car_model);
+              return (
+                <article key={vehicle.id} className="db-row admin-row">
+                  <div>
+                    <strong>{vehicle.plate_number}</strong>
+                    <span>{vehicle.car_model}</span>
+                    {vehicle.memo && <small>{vehicle.memo}</small>}
+                  </div>
+                  <div className="vehicle-tags">
+                    <span>{tags.vehicleType}</span>
+                    <span className={tags.mechanicalParking === '가능' ? 'fit' : 'blocked'}>
+                      기계식 {tags.mechanicalParking}
+                    </span>
+                    <small>{tags.mechanicalNote}</small>
+                  </div>
+                  <div className="db-row-actions">
+                    <button type="button" onClick={() => editVehicle(vehicle)} aria-label="수정">
+                      <Pencil size={16} />
+                    </button>
+                    <button type="button" onClick={() => deleteVehicle(vehicle)} aria-label="삭제">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      </section>
+    </main>
+  );
+}
+
 const root = createRoot(document.getElementById('root'));
 
-root.render(window.location.pathname.startsWith('/db') ? <DatabaseApp /> : <CameraApp />);
+const urlParams = new URLSearchParams(window.location.search);
+const appMode = urlParams.get('mode');
+
+root.render(appMode === 'admin' ? <MacAdminApp /> : window.location.pathname.startsWith('/db') ? <DatabaseApp /> : <CameraApp />);
