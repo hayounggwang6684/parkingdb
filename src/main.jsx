@@ -723,6 +723,7 @@ function CameraApp() {
 
 function DatabaseApp({ isActive, onCloseCamera }) {
   const shellRef = useRef(null);
+  const editFormRef = useRef(null);
   const editUnlockedRef = useRef(sessionStorage.getItem(EDIT_UNLOCK_STORAGE_KEY) === 'true');
   const [vehicles, setVehicles] = useState([]);
   const [query, setQuery] = useState('');
@@ -846,6 +847,10 @@ function DatabaseApp({ isActive, onCloseCamera }) {
       memo: vehicle.memo ?? '',
     });
     setNotice(null);
+
+    requestAnimationFrame(() => {
+      editFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   }
 
   function cancelEditVehicle() {
@@ -957,7 +962,7 @@ function DatabaseApp({ isActive, onCloseCamera }) {
         </div>
 
         {editingId && (
-          <form className="mobile-edit-form" onSubmit={saveEditedVehicle}>
+          <form ref={editFormRef} className="mobile-edit-form" onSubmit={saveEditedVehicle}>
             <div className="mobile-edit-form__header">
               <strong>차량 정보 수정</strong>
               <button type="button" onClick={cancelEditVehicle} aria-label="수정 취소">

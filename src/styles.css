@@ -499,6 +499,18 @@ textarea:focus {
   }
 }
 
+@keyframes editFormPop {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (max-width: 520px) {
   .capture-button {
     width: 74px;
@@ -804,6 +816,8 @@ textarea:focus {
   border-radius: 8px;
   padding: 12px;
   background: #eef9f2;
+  scroll-margin-top: 14px;
+  animation: editFormPop 180ms ease-out;
 }
 
 .mobile-edit-form__header {
