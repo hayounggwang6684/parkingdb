@@ -77,6 +77,14 @@ const normalizePlateMiddleSlot = (value) =>
     .map((char) => hangulLikeChars[char] ?? char)
     .join('');
 
+const getDigitDistance = (first, second) => {
+  if (!first || !second || first.length !== second.length) return Number.POSITIVE_INFINITY;
+
+  return first.split('').reduce((distance, digit, index) => (
+    digit === second[index] ? distance : distance + 1
+  ), 0);
+};
+
 const getPlateVariants = (text) => {
   const compact = normalizePlate(text);
   return [...new Set([compact, correctDigitLikeText(compact), normalizePlateMiddleSlot(compact)])];
@@ -128,6 +136,9 @@ const scoreKnownPlateCandidate = (candidate, savedVehicles) => {
     if (isMissingLeadingPlateDigit(savedPlate, normalizedCandidate)) return Math.max(score, 7);
     if (lastFourDigits && savedPlate === lastFourDigits) return Math.max(score, 6);
     if (lastFourDigits && savedPlate.endsWith(lastFourDigits)) return Math.max(score, 4);
+    if (lastFourDigits && getDigitDistance(savedPlate.match(/\d{4}$/)?.[0], lastFourDigits) === 1) {
+      return Math.max(score, 3);
+    }
 
     return score;
   }, 0);
@@ -388,10 +399,14 @@ function CameraApp() {
   async function recognizePlate(sourceCanvas) {
     setOcrProgress('OCR 준비 중');
     const imageCandidates = createOcrImageCandidates(sourceCanvas);
+    const pageSegModes = ['7', '8'];
+    const totalAttempts = imageCandidates.length * pageSegModes.length;
+    let currentAttempt = 0;
     const worker = await createWorker('kor+eng', 1, {
       logger: (message) => {
         if (message.status === 'recognizing text') {
-          setOcrProgress(`OCR 인식 중 ${Math.round(message.progress * 100)}%`);
+          const progress = Math.round(((currentAttempt + message.progress) / totalAttempts) * 100);
+          setOcrProgress(`OCR 인식 중 ${Math.min(99, progress)}%`);
         }
       },
     });
@@ -399,7 +414,6 @@ function CameraApp() {
     try {
       const results = [];
       const rawTexts = [];
-      const pageSegModes = ['7', '8', '13'];
 
       for (let modeIndex = 0; modeIndex < pageSegModes.length; modeIndex += 1) {
         await worker.setParameters({
@@ -409,7 +423,8 @@ function CameraApp() {
         });
 
         for (let index = 0; index < imageCandidates.length; index += 1) {
-          setOcrProgress(`OCR 인식 중 ${modeIndex + 1}/${pageSegModes.length} ${index + 1}/${imageCandidates.length}`);
+          currentAttempt = modeIndex * imageCandidates.length + index;
+          setOcrProgress(`OCR 인식 중 ${Math.round((currentAttempt / totalAttempts) * 100)}%`);
           const {
             data: { text },
           } = await worker.recognize(imageCandidates[index]);
@@ -428,6 +443,7 @@ function CameraApp() {
 
       const best = results.sort((a, b) => b.score - a.score)[0];
       setRawOcrText(rawTexts.join(' / '));
+      setOcrProgress('OCR 인식 중 100%');
       return best?.candidate ?? '';
     } finally {
       await worker.terminate();
@@ -436,15 +452,15 @@ function CameraApp() {
 
   function createOcrImageCandidates(sourceCanvas) {
     const cropFrames = [
-      { x: 0.1, y: 0.4, width: 0.8, height: 0.26 },
-      { x: 0.16, y: 0.43, width: 0.68, height: 0.22 },
-      { x: 0.08, y: 0.36, width: 0.84, height: 0.34 },
-      { x: 0.02, y: 0.28, width: 0.96, height: 0.5 },
+      { x: 0.06, y: 0.34, width: 0.88, height: 0.4 },
+      { x: 0.1, y: 0.38, width: 0.8, height: 0.32 },
+      { x: 0.14, y: 0.42, width: 0.72, height: 0.26 },
+      { x: 0.02, y: 0.26, width: 0.96, height: 0.58 },
     ];
 
     return cropFrames.flatMap((frame) => {
       const outputCanvas = document.createElement('canvas');
-      const targetWidth = 1400;
+      const targetWidth = 1800;
       const cropWidth = sourceCanvas.width * frame.width;
       const cropHeight = sourceCanvas.height * frame.height;
       outputCanvas.width = targetWidth;
@@ -463,12 +479,34 @@ function CameraApp() {
         outputCanvas.height,
       );
 
-      return createPreprocessedOcrImages(outputCanvas);
+      return [-9, 0, 9].flatMap((angle) =>
+        createPreprocessedOcrImages(rotateCanvas(outputCanvas, angle)),
+      );
     });
   }
 
+  function rotateCanvas(sourceCanvas, angle) {
+    if (angle === 0) return sourceCanvas;
+
+    const radians = (angle * Math.PI) / 180;
+    const sin = Math.abs(Math.sin(radians));
+    const cos = Math.abs(Math.cos(radians));
+    const outputCanvas = document.createElement('canvas');
+    outputCanvas.width = Math.ceil(sourceCanvas.width * cos + sourceCanvas.height * sin);
+    outputCanvas.height = Math.ceil(sourceCanvas.width * sin + sourceCanvas.height * cos);
+
+    const context = outputCanvas.getContext('2d');
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
+    context.translate(outputCanvas.width / 2, outputCanvas.height / 2);
+    context.rotate(radians);
+    context.drawImage(sourceCanvas, -sourceCanvas.width / 2, -sourceCanvas.height / 2);
+
+    return outputCanvas;
+  }
+
   function createPreprocessedOcrImages(sourceCanvas) {
-    const modes = ['gray', 'binary', 'binaryDark'];
+    const modes = ['gray', 'binary'];
 
     return modes.map((mode) => {
       const outputCanvas = document.createElement('canvas');
@@ -482,8 +520,9 @@ function CameraApp() {
       const { data } = image;
       for (let index = 0; index < data.length; index += 4) {
         const gray = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
-        const contrast = gray > 145 ? 255 : 0;
-        const value = mode === 'gray' ? gray : mode === 'binaryDark' ? 255 - contrast : contrast;
+        const enhanced = Math.max(0, Math.min(255, (gray - 118) * 1.75 + 128));
+        const contrast = enhanced > 142 ? 255 : 0;
+        const value = mode === 'gray' ? enhanced : contrast;
 
         data[index] = value;
         data[index + 1] = value;
@@ -565,7 +604,14 @@ function CameraApp() {
       normalizePlate(vehicle.plate_number).endsWith(lastFourDigits),
     );
 
-    return lastFourMatches.length === 1 ? lastFourMatches[0] : null;
+    if (lastFourMatches.length === 1) return lastFourMatches[0];
+
+    const fuzzyLastFourMatches = vehicles.filter((vehicle) => {
+      const savedLastFour = normalizePlate(vehicle.plate_number).match(/\d{4}$/)?.[0];
+      return getDigitDistance(savedLastFour, lastFourDigits) === 1;
+    });
+
+    return fuzzyLastFourMatches.length === 1 ? fuzzyLastFourMatches[0] : null;
   }
 
   function handleLookupResult(vehicle, plateNumber) {
@@ -668,9 +714,9 @@ function CameraApp() {
               <span className="plate-guide__sample">12가3456</span>
             </div>
             <ul className="plate-guide__tips">
-              <li>정면</li>
+              <li>위에서 대각선 가능</li>
               <li>흔들림 없이</li>
-              <li>빛 반사 피하기</li>
+              <li>번호판 크게</li>
             </ul>
           </div>
         )}
