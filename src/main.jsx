@@ -26,6 +26,8 @@ const normalizePlate = (value) =>
 const PLATE_OCR_WHITELIST =
   '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ가나다라마거너더러머버서어저고노도로모보소오조구누두루무부수우주하허호';
 
+const PLATE_HANGUL_CHARS = '가나다라마거너더러머버서어저고노도로모보소오조구누두루무부수우주하허호';
+
 const digitLikeChars = {
   O: '0',
   Q: '0',
@@ -35,6 +37,17 @@ const digitLikeChars = {
   Z: '2',
   S: '5',
   B: '8',
+};
+
+const hangulLikeChars = {
+  7: '가',
+  F: '가',
+  R: '라',
+  A: '마',
+  O: '어',
+  D: '어',
+  U: '나',
+  H: '하',
 };
 
 const isElectricVehicle = (carModel) =>
@@ -52,17 +65,44 @@ const EDIT_UNLOCK_STORAGE_KEY = 'parking-edit-unlocked';
 const correctDigitLikeText = (value) =>
   value.replace(/[OQDILZSB]/g, (char) => digitLikeChars[char] ?? char);
 
+const normalizePlateSlot = (value) =>
+  value
+    .split('')
+    .map((char) => digitLikeChars[char] ?? char)
+    .join('');
+
+const normalizePlateMiddleSlot = (value) =>
+  value
+    .split('')
+    .map((char) => hangulLikeChars[char] ?? char)
+    .join('');
+
 const getPlateVariants = (text) => {
   const compact = normalizePlate(text);
-  return [...new Set([compact, correctDigitLikeText(compact)])];
+  return [...new Set([compact, correctDigitLikeText(compact), normalizePlateMiddleSlot(compact)])];
 };
 
 const extractPlateCandidates = (text) => {
   const candidates = new Set();
 
   getPlateVariants(text).forEach((compact) => {
+    for (let index = 0; index <= compact.length - 7; index += 1) {
+      for (const prefixLength of [3, 2]) {
+        const plateLength = prefixLength + 1 + 4;
+        const fragment = compact.slice(index, index + plateLength);
+        if (fragment.length !== plateLength) continue;
+
+        const prefix = normalizePlateSlot(fragment.slice(0, prefixLength));
+        const middle = normalizePlateMiddleSlot(fragment[prefixLength]);
+        const suffix = normalizePlateSlot(fragment.slice(prefixLength + 1));
+
+        if (/^\d+$/.test(prefix) && PLATE_HANGUL_CHARS.includes(middle) && /^\d{4}$/.test(suffix)) {
+          candidates.add(`${prefix}${middle}${suffix}`);
+        }
+      }
+    }
+
     compact.match(/\d{2,3}[가-힣]\d{4}/g)?.forEach((candidate) => candidates.add(candidate));
-    compact.match(/\d{2,3}[가-힣A-Z]\d{4}/g)?.forEach((candidate) => candidates.add(candidate));
     compact.match(/\d{4}/g)?.forEach((candidate) => candidates.add(candidate));
   });
 
@@ -99,8 +139,8 @@ const scoreOcrCandidate = (candidate, savedVehicles) => {
 };
 
 const scorePlateCandidate = (candidate) => {
-  if (/^\d{2,3}[가-힣]\d{4}$/.test(candidate)) return 4;
-  if (/^\d{2,3}[가-힣A-Z]\d{4}$/.test(candidate)) return 3;
+  if (/^\d{3}[가-힣]\d{4}$/.test(candidate)) return 6;
+  if (/^\d{2}[가-힣]\d{4}$/.test(candidate)) return 5;
   if (/^\d{4}$/.test(candidate)) return 2;
   return candidate ? 1 : 0;
 };
@@ -357,30 +397,33 @@ function CameraApp() {
     });
 
     try {
-      await worker.setParameters({
-        tessedit_pageseg_mode: '7',
-        tessedit_char_whitelist: PLATE_OCR_WHITELIST,
-        preserve_interword_spaces: '1',
-      });
-
       const results = [];
       const rawTexts = [];
+      const pageSegModes = ['7', '8', '13'];
 
-      for (let index = 0; index < imageCandidates.length; index += 1) {
-        setOcrProgress(`OCR 인식 중 ${index + 1}/${imageCandidates.length}`);
-        const {
-          data: { text },
-        } = await worker.recognize(imageCandidates[index]);
-        const candidates = extractPlateCandidates(text);
-        rawTexts.push(text);
-
-        candidates.forEach((candidate) => {
-          results.push({
-            text,
-            candidate,
-            score: scoreOcrCandidate(candidate, vehicles),
-          });
+      for (let modeIndex = 0; modeIndex < pageSegModes.length; modeIndex += 1) {
+        await worker.setParameters({
+          tessedit_pageseg_mode: pageSegModes[modeIndex],
+          tessedit_char_whitelist: PLATE_OCR_WHITELIST,
+          preserve_interword_spaces: '1',
         });
+
+        for (let index = 0; index < imageCandidates.length; index += 1) {
+          setOcrProgress(`OCR 인식 중 ${modeIndex + 1}/${pageSegModes.length} ${index + 1}/${imageCandidates.length}`);
+          const {
+            data: { text },
+          } = await worker.recognize(imageCandidates[index]);
+          const candidates = extractPlateCandidates(text);
+          rawTexts.push(text);
+
+          candidates.forEach((candidate) => {
+            results.push({
+              text,
+              candidate,
+              score: scoreOcrCandidate(candidate, vehicles),
+            });
+          });
+        }
       }
 
       const best = results.sort((a, b) => b.score - a.score)[0];
